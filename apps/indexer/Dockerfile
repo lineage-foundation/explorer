@@ -6,7 +6,7 @@ FROM base AS build
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm -F @explorer/indexer build
-RUN pnpm --filter @explorer/indexer... --prod deploy /out
+RUN pnpm --filter @explorer/indexer --prod deploy /out
 
 FROM gcr.io/distroless/nodejs22-debian12 AS runtime
 WORKDIR /app
