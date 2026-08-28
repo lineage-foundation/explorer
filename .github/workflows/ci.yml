@@ -1,0 +1,44 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: explorer
+          POSTGRES_PASSWORD: explorer
+          POSTGRES_DB: explorer_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U explorer"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgres://explorer:explorer@localhost:5432/explorer_test
+      DATABASE_URL: postgres://explorer:explorer@localhost:5432/explorer_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+      - run: pnpm test
+      - name: Assert no schema drift
+        run: |
+          pnpm -F @explorer/db exec drizzle-kit generate
+          git diff --exit-code packages/db/drizzle
+      - name: Rebrand grep gate
+        run: |
+          ! grep -rniE "aiblock|aibcoin|@2waychain|2wayjs|\bABlock" \
+            --exclude-dir=node_modules --exclude-dir=.git . \
+            --exclude=ci.yml \
+            --include="*.ts" --include="*.tsx" --include="*.json" \
+            --include="*.md" --include="*.yml" --include="*.yaml"
