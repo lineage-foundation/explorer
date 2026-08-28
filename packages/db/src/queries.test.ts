@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createDb, type Database } from "./client.js";
-import { block, transaction, txOut, coinsHistory, circulatingSupply } from "./schema.js";
+import { block, transaction, txIn, txOut, coinsHistory, circulatingSupply } from "./schema.js";
 import {
   getBlocks, getBlocksCount, getBlockByHashOrNumber, getBlockTransactions,
   getTransactions, getTransactionsCount, getTransactionByHash,
-  getAccountBalance, getCirculatingSupply,
+  getAccountBalance, getAccountTransactions, getCirculatingSupply,
 } from "./queries.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
@@ -13,6 +13,7 @@ const db = () => handle.db;
 
 beforeAll(async () => {
   handle = createDb(URL);
+  await db().delete(txIn);
   await db().delete(txOut);
   await db().delete(transaction);
   await db().delete(coinsHistory);
@@ -30,6 +31,7 @@ beforeAll(async () => {
   await db().insert(txOut).values([
     { txId: 1, txHash: "tx_1", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr_1", n: 0 },
   ]);
+  await db().insert(txIn).values([{ txId: 1, txHash: "tx_1", scriptSignature: {} }]);
   await db().insert(circulatingSupply).values([{ id: 1, circulatingSupply: "12345" }]);
 });
 
@@ -84,5 +86,25 @@ describe("read queries", () => {
 
   it("returns circulating supply", async () => {
     expect((await getCirculatingSupply(db())).circulatingSupply).toBe("12345");
+  });
+
+  it("returns an account's transactions joined via address outputs", async () => {
+    const res = await getAccountTransactions(db(), "addr_1", { limit: 25, offset: 0 });
+    expect(res.transactions).toHaveLength(1);
+    expect(res.transactions[0]?.hash).toBe("tx_1");
+    expect(res.pagination.total).toBe(1);
+    expect(res.transactions[0]?.outs[0]?.amount).toBe("500");
+  });
+
+  it("returns no transactions for an unknown address", async () => {
+    const res = await getAccountTransactions(db(), "unknown", { limit: 25, offset: 0 });
+    expect(res.transactions).toEqual([]);
+    expect(res.pagination).toEqual({ total: 0, limit: 25, offset: 0, hasMore: false });
+  });
+
+  it("paginates an account's transactions", async () => {
+    const res = await getAccountTransactions(db(), "addr_1", { limit: 1, offset: 0 });
+    expect(res.transactions).toHaveLength(1);
+    expect(res.pagination.hasMore).toBe(false);
   });
 });
