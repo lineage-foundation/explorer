@@ -41,8 +41,12 @@ jobs:
             pnpm -F @explorer/db exec drizzle-kit migrate
       - name: Rebrand grep gate
         run: |
-          ! grep -rniE "aiblock|aibcoin|@2waychain|2wayjs|\bABlock" \
-            --exclude-dir=node_modules --exclude-dir=.git . \
-            --exclude=ci.yml \
-            --include="*.ts" --include="*.tsx" --include="*.json" \
-            --include="*.md" --include="*.yml" --include="*.yaml"
+          # Scan all tracked files (git grep respects .gitignore) for legacy
+          # brand identifiers, excluding this workflow by path — it necessarily
+          # contains the pattern to define the gate. Path-based exclusion is
+          # reliable across grep implementations (unlike --exclude=basename).
+          if git grep -niE "aiblock|aibcoin|@2waychain|2wayjs|ablock" \
+               -- ':!.github/workflows/ci.yml'; then
+            echo "Found forbidden legacy-brand strings (see matches above)"
+            exit 1
+          fi
