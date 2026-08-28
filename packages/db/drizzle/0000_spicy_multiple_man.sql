@@ -79,6 +79,11 @@ CREATE TABLE IF NOT EXISTS "tx_out" (
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "UK_block_hash" ON "block" USING btree ("hash");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "UK_block_num" ON "block" USING btree ("num");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "IX_ch_address_date" ON "coins_history" USING btree ("address","date");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "UK_transaction_hash" ON "transaction" USING btree ("hash");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "IX_tx_out_txHash_n" ON "tx_out" USING btree ("txHash","n");--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "transaction" ADD CONSTRAINT "FK_08f3024b3fad3c62274225faf91" FOREIGN KEY ("blockHash") REFERENCES "public"."block"("hash") ON DELETE no action ON UPDATE no action;
 EXCEPTION
@@ -102,9 +107,3 @@ DO $$ BEGIN
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
---> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "UK_block_hash" ON "block" USING btree ("hash");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "UK_block_num" ON "block" USING btree ("num");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "IX_ch_address_date" ON "coins_history" USING btree ("address","date");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "UK_transaction_hash" ON "transaction" USING btree ("hash");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "IX_tx_out_txHash_n" ON "tx_out" USING btree ("txHash","n");

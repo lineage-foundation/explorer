@@ -18,26 +18,10 @@ function push(): void {
 export default async function setup() {
   process.env.DATABASE_URL = TEST_DB_URL;
 
-  // First pass: creates the base tables. On a fresh database this run's
-  // later statements fail (see below) but exits 0 regardless, so we always
-  // continue to the workaround step rather than branching on success.
   push();
 
-  // drizzle-kit push generates ALTER TABLE ... ADD CONSTRAINT (FK)
-  // statements before the CREATE UNIQUE INDEX statements for the columns
-  // those FKs reference (block.hash, block.num, transaction.hash are
-  // declared via a standalone uniqueIndex(), not an inline .unique()). On a
-  // fresh database this makes the FK statements fail with "there is no
-  // unique constraint matching given keys" even though the base tables get
-  // created first. Work around it by creating the missing unique indexes
-  // directly (idempotent — safe if they already exist), then re-running
-  // push so the FK statements have something to reference.
   const sql = postgres(TEST_DB_URL, { max: 1 });
   try {
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS "UK_block_hash" ON "block" USING btree ("hash")`;
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS "UK_block_num" ON "block" USING btree ("num")`;
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS "UK_transaction_hash" ON "transaction" USING btree ("hash")`;
-
     // queries.test.ts's beforeAll clears rows with DELETE (not TRUNCATE), so
     // serial id sequences (notably tx_out.id, which getAccountBalance's test
     // hard-codes as 1 via coins_history.outIds) keep advancing across
@@ -48,6 +32,4 @@ export default async function setup() {
   } finally {
     await sql.end({ timeout: 5 });
   }
-
-  push();
 }

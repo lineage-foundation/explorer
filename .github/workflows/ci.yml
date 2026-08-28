@@ -35,6 +35,11 @@ jobs:
         run: |
           pnpm -F @explorer/db exec drizzle-kit generate
           git diff --exit-code packages/db/drizzle
+      - name: Fresh-DB migrate smoke test
+        run: |
+          psql "$TEST_DATABASE_URL" -c 'create database explorer_migrate_smoke;'
+          DATABASE_URL=postgres://explorer:explorer@localhost:5432/explorer_migrate_smoke \
+            pnpm -F @explorer/db exec drizzle-kit migrate
       - name: Rebrand grep gate
         run: |
           ! grep -rniE "aiblock|aibcoin|@2waychain|2wayjs|\bABlock" \
