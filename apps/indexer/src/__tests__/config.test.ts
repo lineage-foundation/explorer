@@ -31,4 +31,16 @@ describe("loadConfig", () => {
   it("throws on a non-numeric numeric var", () => {
     expect(() => loadConfig({ ...base, INDEXER_POLL_INTERVAL_MS: "soon" })).toThrow(/INDEXER_POLL_INTERVAL_MS/);
   });
+
+  it("treats an empty HEALTH_PORT as disabled and parses a numeric one", () => {
+    const disabled = loadConfig({ ...base, HEALTH_PORT: "" });
+    expect(disabled.healthPort).toBeNull();
+
+    const enabled = loadConfig({ ...base, HEALTH_PORT: "9000" });
+    expect(enabled.healthPort).toBe(9000);
+  });
+
+  it("throws on an invalid INDEXER_LOCK_ON_BUSY value", () => {
+    expect(() => loadConfig({ ...base, INDEXER_LOCK_ON_BUSY: "maybe" })).toThrow(/INDEXER_LOCK_ON_BUSY/);
+  });
 });
