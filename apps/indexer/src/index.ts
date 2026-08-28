@@ -14,6 +14,11 @@ interface WorkerDeps {
   dbHandle: DbHandle;
 }
 
+// setInterval's delay is a 32-bit signed int under the hood, so this is the
+// largest safe interval (~12.4 days) rather than a literal "forever"; the
+// timer just needs to keep firing far less often than any expected restart.
+const KEEP_ALIVE_MS = 1 << 30;
+
 export function createWorker(deps: WorkerDeps): { start: () => Promise<void>; stop: () => Promise<void> } {
   let running = false;
   // No ingestion logic yet: this interval only keeps the Node.js event loop
@@ -24,7 +29,7 @@ export function createWorker(deps: WorkerDeps): { start: () => Promise<void>; st
   return {
     async start() {
       running = true;
-      keepAlive = setInterval(() => {}, 1 << 30);
+      keepAlive = setInterval(() => {}, KEEP_ALIVE_MS);
       deps.logger.info({ event: "worker.start" }, "indexer started");
     },
     async stop() {
@@ -48,7 +53,9 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     defaultLogger.info({ event: "signal", signal }, "shutting down");
     await worker.stop();
-    process.exit(0);
+    // Flush pino's destination before exiting so the final log lines above
+    // (and any emitted by worker.stop()) are not dropped mid-write.
+    defaultLogger.flush(() => process.exit(0));
   };
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
