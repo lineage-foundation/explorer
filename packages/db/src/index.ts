@@ -4,3 +4,4 @@ export type { Database } from "./client.js";
 export type {
   Block, Transaction, TxIn, TxOut, TxInExpanded, CoinsHistory, CirculatingSupply,
 } from "./schema.js";
+export * from "./queries.js";
