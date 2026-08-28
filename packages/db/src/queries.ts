@@ -54,7 +54,7 @@ export async function getBlocks(
     .orderBy(direction(block.num))
     .limit(limit)
     .offset(offset);
-  return { blocks: rows, pagination: { total, limit, offset } };
+  return { blocks: rows, pagination: { total, limit, offset, hasMore: offset + limit < total } };
 }
 
 export async function getBlockByHashOrNumber(db: Database, hashOrNumber: string): Promise<Block | null> {

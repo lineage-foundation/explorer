@@ -42,6 +42,12 @@ describe("read queries", () => {
     const res = await getBlocks(db(), { limit: 10, offset: 0, order: "desc" });
     expect(res.blocks[0]?.num).toBe(2);
     expect(res.pagination.total).toBe(2);
+    expect(res.pagination.hasMore).toBe(false);
+  });
+
+  it("reports hasMore when more blocks remain beyond the page", async () => {
+    const res = await getBlocks(db(), { limit: 1, offset: 0, order: "desc" });
+    expect(res.pagination.hasMore).toBe(true);
   });
 
   it("counts blocks", async () => {
