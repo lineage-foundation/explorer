@@ -1,0 +1,35 @@
+@theme {
+  --color-bg-canvas: oklch(13% 0.018 200);
+  --color-bg: oklch(15% 0.018 200);
+  --color-bg-raised: oklch(18% 0.020 200);
+  --color-surface: oklch(20% 0.022 200);
+  --color-surface-2: oklch(25% 0.024 198);
+
+  --color-text: oklch(95% 0.010 195);
+  --color-text-muted: oklch(73% 0.016 195);
+  --color-text-subtle: oklch(60% 0.016 195);
+  --color-text-inverse: oklch(16% 0.030 190);
+
+  --color-border: oklch(29% 0.022 200);
+  --color-border-strong: oklch(38% 0.026 200);
+
+  --color-accent: oklch(82% 0.16 165);
+  --color-accent-strong: oklch(86% 0.15 167);
+  --color-accent-ink: oklch(18% 0.05 175);
+  --color-link: oklch(78% 0.12 218);
+  --color-link-hover: oklch(85% 0.11 218);
+
+  --color-success: oklch(83% 0.17 150);
+  --color-warning: oklch(82% 0.14 80);
+  --color-danger: oklch(68% 0.18 18);
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
