@@ -55,4 +55,14 @@ describe("LineageNodeClient", () => {
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
     expect(await client.getTotalSupply()).toBe("0");
   });
+
+  it("delegates getCirculatingSupply to the issued-supply endpoint", async () => {
+    const big = "12345678901234567890";
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(`{"content": ${big}}`, { status: 200 }),
+    );
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    expect(await client.getCirculatingSupply()).toBe(big);
+    expect(fetchImpl.mock.calls[0]![0]).toBe("http://node/issued_supply");
+  });
 });
