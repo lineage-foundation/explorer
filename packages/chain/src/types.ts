@@ -36,6 +36,7 @@ export interface LineageTransaction {
   outputs: LineageTxOut[];
   version: number;
   druid_info: unknown | null;
+  fees?: unknown; // present on node data; not in the upstream type. See vendoring note above.
 }
 
 export interface LineageBlockHeader {
