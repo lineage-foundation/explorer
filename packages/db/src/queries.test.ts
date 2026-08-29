@@ -125,4 +125,13 @@ describe("read queries", () => {
     expect(await getLatestCoinsHistoryOutIds(db(), "addr_1")).toEqual([1]);
     expect(await getLatestCoinsHistoryOutIds(db(), "nobody")).toEqual([]);
   });
+
+  it("breaks coins_history date ties by id (newest row wins)", async () => {
+    const d = new Date("2024-06-01T00:00:00Z");
+    await db().insert(coinsHistory).values([
+      { address: "tie", date: d, outIds: [11] },
+      { address: "tie", date: d, outIds: [22] },
+    ]);
+    expect(await getLatestCoinsHistoryOutIds(db(), "tie")).toEqual([22]);
+  });
 });

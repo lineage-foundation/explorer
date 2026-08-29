@@ -180,7 +180,7 @@ export async function getAccountBalance(db: Database, address: string): Promise<
     .select({ outIds: coinsHistory.outIds })
     .from(coinsHistory)
     .where(eq(coinsHistory.address, address))
-    .orderBy(desc(coinsHistory.date))
+    .orderBy(desc(coinsHistory.date), desc(coinsHistory.id))
     .limit(1);
   const outIds = (latest?.outIds as number[] | undefined) ?? [];
   if (outIds.length === 0) return { balance: "0" };
@@ -247,7 +247,7 @@ export async function getLatestCoinsHistoryOutIds(db: Database, address: string)
     .select({ outIds: coinsHistory.outIds })
     .from(coinsHistory)
     .where(eq(coinsHistory.address, address))
-    .orderBy(desc(coinsHistory.date))
+    .orderBy(desc(coinsHistory.date), desc(coinsHistory.id))
     .limit(1);
   return (row?.outIds as number[] | undefined) ?? [];
 }

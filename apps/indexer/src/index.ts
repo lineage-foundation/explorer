@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ event: "signal", signal }, "shutting down");
     await worker.stop();
-    process.exit(0);
+    logger.flush(() => process.exit(0));
   };
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));

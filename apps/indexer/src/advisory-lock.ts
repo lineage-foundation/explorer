@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 
-// Fixed application lock key derived from "LNGX" — stable across processes.
-const LOCK_KEY = 1_279_874_392; // 0x4C4E4758
+// Fixed application-wide advisory-lock key (stable constant; must not change across deployments).
+const LOCK_KEY = 1_279_874_392;
 
 export function createAdvisoryLock(sql: ReturnType<typeof postgres>): {
   tryAcquire: () => Promise<boolean>;
