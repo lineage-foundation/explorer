@@ -5,7 +5,9 @@ import { getTransactionByHash, getBlockByHashOrNumber } from "@explorer/db";
 import { PageHeader } from "../../components/PageHeader.js";
 import { InputsOutputs } from "../../components/InputsOutputs.js";
 import { Card, Pill, CopyButton } from "@explorer/ui";
-import { absoluteTime, relativeTime, txTypeLabel } from "../../../lib/format.js";
+import {
+  absoluteTime, relativeTime, truncateHash, txTypeLabel,
+} from "../../../lib/format.js";
 
 export const revalidate = 3600;
 
@@ -33,9 +35,9 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
   return (
     <div className="space-y-6">
       <div>
-        <PageHeader eyebrow="Transaction" title="" />
+        <PageHeader eyebrow="Transaction" title={truncateHash(tx.hash, 10, 8)} />
         <div className="-mt-4 flex flex-wrap items-center gap-2 break-all font-mono text-sm text-text">
-          {tx.hash} <CopyButton value={tx.hash} /> <Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill>
+          <CopyButton value={tx.hash} /> <Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill>
         </div>
       </div>
       <Card className="p-4">

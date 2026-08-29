@@ -8,8 +8,12 @@ export async function seed(): Promise<void> {
   const { db, close } = createDb(URL);
   try {
     await db.insert(schema.block).values([
-      { version: 1, num: 0, hash: "H0", timestamp: new Date("2024-01-01T00:00:00Z"), nbTx: 1 },
-      { version: 1, num: 1, hash: "H1", previousHash: "H0", timestamp: new Date("2024-01-02T00:00:00Z"), nbTx: 1 },
+      {
+        version: 1, num: 0, hash: "H0", timestamp: new Date("2024-01-01T00:00:00Z"), nbTx: 1, nonceAndMiningTxHash: ["nonce0", "cb0"],
+      },
+      {
+        version: 1, num: 1, hash: "H1", previousHash: "H0", timestamp: new Date("2024-01-02T00:00:00Z"), nbTx: 1, nonceAndMiningTxHash: ["nonce1", "cb1"],
+      },
     ]);
     await db.insert(schema.transaction).values([
       { hash: "cb0", blockHash: "H0", version: 1, coinbase: true },
@@ -23,6 +27,11 @@ export async function seed(): Promise<void> {
       { txId: 1, txHash: "cb0", valueType: "token", amount: R(100), locktime: "0", scriptPublicKey: "addrA", n: 0 },
       { txId: 2, txHash: "t0", valueType: "token", amount: R(30), locktime: "0", scriptPublicKey: "addrA", n: 0 },
       { txId: 4, txHash: "t1", valueType: "token", amount: R(30), locktime: "0", scriptPublicKey: "addrB", n: 0 },
+      // n:1 item output on t0; inserted last to keep the pre-existing txOut serial ids
+      // (and coinsHistory.outIds below, which reference them) unchanged.
+      {
+        txId: 2, txHash: "t0", valueType: "item", amount: null, locktime: "0", genesisHash: "gen1", itemMetadata: "meta1", scriptPublicKey: "addrA", n: 1,
+      },
     ]);
     await db.insert(schema.txIn).values([
       { txId: 4, txHash: "t1", previousOutTxHash: "t0", previousOutTxN: 0, scriptSignature: {} },

@@ -20,7 +20,7 @@ export function BlockTable({ blocks }: { blocks: BlockListItem[] }) {
                 </Mono>
               </Link>
             </TD>
-            <TD><span className="text-text-muted">{relativeTime(b.timestamp)}</span></TD>
+            <TD><span suppressHydrationWarning className="text-text-muted">{relativeTime(b.timestamp)}</span></TD>
             <TD><Mono>{b.nbTx ?? 0}</Mono></TD>
           </TR>
         ))}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TOKEN_DISPLAY_NAME } from "@explorer/config";
 
 export function SiteFooter() {
@@ -6,12 +7,12 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-8 text-sm text-text-subtle sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <span>{TOKEN_DISPLAY_NAME} Explorer</span>
         <nav className="flex gap-4">
-          <a href="/legal/privacy" className="hover:text-text">
+          <Link href="/legal/privacy" className="hover:text-text">
             Privacy
-          </a>
-          <a href="/legal/terms" className="hover:text-text">
+          </Link>
+          <Link href="/legal/terms" className="hover:text-text">
             Terms
-          </a>
+          </Link>
         </nav>
       </div>
     </footer>

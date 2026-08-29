@@ -12,6 +12,7 @@ function sumAmounts(values: (string | null)[]): string {
 export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolean }) {
   const inTotal = sumAmounts(tx.ins.map((i) => i.amount));
   const outTotal = sumAmounts(tx.outs.filter((o) => o.valueType === "token").map((o) => o.amount));
+  const inputAddrs = new Set(tx.ins.map((i) => i.fromAddress).filter(Boolean));
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-center gap-3 rounded-md border border-border bg-bg-raised px-3 py-2 font-mono text-sm">
@@ -56,6 +57,7 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
               <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
                 index {o.n}
                 {o.valueType === "item" && o.genesisHash ? ` · genesis ${truncateHash(o.genesisHash, 6, 4)}` : ""}
+                {o.valueType === "token" && o.scriptPublicKey && inputAddrs.has(o.scriptPublicKey) ? " · change" : ""}
               </div>
             </div>
             {o.valueType === "item"

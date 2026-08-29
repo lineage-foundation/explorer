@@ -14,6 +14,7 @@ export function SearchBar() {
     if (href) {
       setError(false);
       router.push(href);
+      setValue("");
     } else {
       setError(true);
     }
@@ -30,10 +31,11 @@ export function SearchBar() {
         }}
         placeholder="Search block / tx / address…"
         aria-label="Search"
+        aria-describedby={error ? "search-error" : undefined}
         className="w-full rounded-md border border-border bg-bg-raised px-3 py-2 font-mono text-xs text-text placeholder:text-text-subtle focus:border-link focus:outline-none"
       />
       {error ? (
-        <p className="mt-1 text-[0.7rem] text-danger">
+        <p id="search-error" role="alert" className="mt-1 text-[0.7rem] text-danger">
           Unrecognized — enter a block number/hash, transaction, or address.
         </p>
       ) : null}

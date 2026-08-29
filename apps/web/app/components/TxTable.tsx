@@ -19,7 +19,7 @@ export function TxTable({ txs }: { txs: TxListItem[] }) {
                   <Mono>{truncateHash(t.hash)}</Mono>
                 </Link>
               </TD>
-              <TD><span className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
+              <TD><span suppressHydrationWarning className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
               <TD><Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill></TD>
             </TR>
           );

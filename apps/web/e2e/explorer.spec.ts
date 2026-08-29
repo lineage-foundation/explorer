@@ -25,6 +25,16 @@ test("transaction detail shows resolved input address and outputs", async ({ pag
   await expect(page.getByRole("link", { name: "addrA", exact: true })).toBeVisible();
 });
 
+test("coinbase transaction shows the newly minted note", async ({ page }) => {
+  await page.goto("/transaction/cb0");
+  await expect(page.getByText(/newly minted/i).first()).toBeVisible();
+});
+
+test("transaction with an item output shows an item tag", async ({ page }) => {
+  await page.goto("/transaction/t0");
+  await expect(page.getByText("item", { exact: true })).toBeVisible();
+});
+
 test("address shows balance and history", async ({ page }) => {
   await page.goto("/address/addrB");
   await expect(page.getByText("Balance")).toBeVisible();
