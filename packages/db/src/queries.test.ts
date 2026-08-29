@@ -5,6 +5,7 @@ import {
   getBlocks, getBlocksCount, getBlockByHashOrNumber, getBlockTransactions,
   getTransactions, getTransactionsCount, getTransactionByHash,
   getAccountBalance, getAccountTransactions, getCirculatingSupply,
+  getMaxBlockNum, getBlockHashByNum, getLatestCoinsHistoryOutIds,
 } from "./queries.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
@@ -112,5 +113,16 @@ describe("read queries", () => {
     const res = await getAccountTransactions(db(), "addr_1", { limit: 1, offset: 0 });
     expect(res.transactions).toHaveLength(1);
     expect(res.pagination.hasMore).toBe(false);
+  });
+
+  it("returns the max block num and a block hash by num", async () => {
+    expect(await getMaxBlockNum(db())).toBe(2);
+    expect(await getBlockHashByNum(db(), 1)).toBe("b_hash_1");
+    expect(await getBlockHashByNum(db(), 999)).toBeNull();
+  });
+
+  it("returns latest coins_history outIds for an address (empty if none)", async () => {
+    expect(await getLatestCoinsHistoryOutIds(db(), "addr_1")).toEqual([1]);
+    expect(await getLatestCoinsHistoryOutIds(db(), "nobody")).toEqual([]);
   });
 });

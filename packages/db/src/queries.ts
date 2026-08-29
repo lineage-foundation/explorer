@@ -231,3 +231,23 @@ export async function getCirculatingSupply(db: Database): Promise<{ circulatingS
   const [row] = await db.select().from(circulatingSupply).limit(1);
   return { circulatingSupply: row?.circulatingSupply ?? "0" };
 }
+
+export async function getMaxBlockNum(db: Database): Promise<number | null> {
+  const [row] = await db.select({ max: sql<number | null>`max(${block.num})` }).from(block);
+  return row?.max ?? null;
+}
+
+export async function getBlockHashByNum(db: Database, num: number): Promise<string | null> {
+  const [row] = await db.select({ hash: block.hash }).from(block).where(eq(block.num, num)).limit(1);
+  return row?.hash ?? null;
+}
+
+export async function getLatestCoinsHistoryOutIds(db: Database, address: string): Promise<number[]> {
+  const [row] = await db
+    .select({ outIds: coinsHistory.outIds })
+    .from(coinsHistory)
+    .where(eq(coinsHistory.address, address))
+    .orderBy(desc(coinsHistory.date))
+    .limit(1);
+  return (row?.outIds as number[] | undefined) ?? [];
+}
