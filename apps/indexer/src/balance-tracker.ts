@@ -43,7 +43,7 @@ export class BalanceTracker {
     const spent = new Set(spends);
     const result = new Set<number>();
     for (const id of previous) if (!spent.has(id)) result.add(id);
-    for (const id of gains) result.add(id);
+    for (const id of gains) if (!spent.has(id)) result.add(id);
     return [...result];
   }
 }

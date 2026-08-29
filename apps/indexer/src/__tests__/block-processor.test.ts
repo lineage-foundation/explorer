@@ -56,6 +56,36 @@ describe("processBlock", () => {
     expect((await getAccountBalance(db(), "A")).balance).toBe("200"); // 140 - 40 + 100 (cb1)
   });
 
+  it("resolves a same-block spend even when the spend tx precedes the mint tx (two-pass invariant)", async () => {
+    // tMint mints output n0 to A; tSpend spends tMint:0 to B. tSpend is listed
+    // BEFORE tMint in the transactions array: under a naive single-pass loop,
+    // tSpend would fail to resolve tMint's not-yet-written output. Under the
+    // correct two-pass design (all outputs written before any input is
+    // resolved), tSpend's input resolves correctly regardless of tx order.
+    const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["tSpend", "tMint"] });
+    const cb0 = buildTokenTx([{ address: "M", amount: 50 }]);
+    const tMint = buildTokenTx([{ address: "A", amount: 30 }]);
+    const tSpend = buildSpendTx({ prevHash: "tMint", n: 0 }, [{ address: "B", amount: 30 }]);
+
+    await processBlock(db(), {
+      blockHash: "H0", block,
+      transactions: [
+        { hash: "cb0", tx: cb0, coinbase: true },
+        { hash: "tSpend", tx: tSpend, coinbase: false },
+        { hash: "tMint", tx: tMint, coinbase: false },
+      ],
+      skip: new Set(),
+    });
+
+    const expanded = await db().select().from(schema.txInExpanded);
+    expect(expanded).toHaveLength(1);
+    expect(expanded[0]?.outScriptPublicKey).toBe("A");
+
+    expect((await getAccountBalance(db(), "A")).balance).toBe("0");
+    expect((await getAccountBalance(db(), "B")).balance).toBe("30");
+    expect((await getAccountBalance(db(), "M")).balance).toBe("50");
+  });
+
   it("is idempotent: reprocessing the same block adds no duplicate rows", async () => {
     const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["t1"] });
     const args = { blockHash: "H0", block,

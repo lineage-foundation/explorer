@@ -14,4 +14,10 @@ describe("BalanceTracker", () => {
     t.addSpend("A", 5); t.addGain("A", 7);
     expect(t.mergeFinal([5, 6], "A").sort((a, b) => a - b)).toEqual([6, 7]);
   });
+
+  it("excludes an id gained and spent in the same block", () => {
+    const t = new BalanceTracker();
+    t.addGain("A", 7); t.addSpend("A", 7); t.addGain("A", 8);
+    expect(t.mergeFinal([5], "A").sort((a, b) => a - b)).toEqual([5, 8]);
+  });
 });
