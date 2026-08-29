@@ -8,12 +8,14 @@
     "build": "next build",
     "start": "next start -p 8080",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@explorer/config": "workspace:*",
     "@explorer/db": "workspace:*",
     "@explorer/ui": "workspace:^",
+    "bignumber.js": "^11.1.5",
     "next": "^15.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -24,6 +26,7 @@
     "@types/react-dom": "^18.3.0",
     "eslint": "^9.11.0",
     "eslint-config-next": "^15.0.0",
-    "tailwindcss": "^4.0.0"
+    "tailwindcss": "^4.0.0",
+    "vitest": "^2.1.1"
   }
 }

@@ -60,6 +60,9 @@ importers:
       '@explorer/ui':
         specifier: workspace:^
         version: link:../../packages/ui
+      bignumber.js:
+        specifier: ^11.1.5
+        version: 11.1.5
       next:
         specifier: ^15.0.0
         version: 15.5.24(@types/node@22.20.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -88,6 +91,9 @@ importers:
       tailwindcss:
         specifier: ^4.0.0
         version: 4.3.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(lightningcss@1.33.0)
 
   packages/chain:
     dependencies:

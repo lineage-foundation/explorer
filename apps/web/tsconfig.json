@@ -21,6 +21,7 @@
   "include": [
     "next-env.d.ts",
     "app",
+    "lib",
     ".next/types/**/*.ts"
   ],
   "exclude": [
