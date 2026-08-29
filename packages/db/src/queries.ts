@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import BigNumber from "bignumber.js";
 import type { Database } from "./client.js";
 import {
-  block, transaction, txIn, txOut, coinsHistory, circulatingSupply,
+  block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
 } from "./schema.js";
 import type { Block, TxIn, TxOut } from "./schema.js";
 
@@ -21,7 +21,13 @@ export interface TxListItem {
 export interface TxDetail {
   blockHash: string; hash: string; version: number; timestamp: Date | null;
   fees: unknown; druidInfo: unknown;
-  ins: { scriptSignature: unknown; previousOutTxHash: string | null; previousOutTxN: number | null }[];
+  ins: {
+    scriptSignature: unknown;
+    previousOutTxHash: string | null;
+    previousOutTxN: number | null;
+    fromAddress: string | null;
+    amount: string | null;
+  }[];
   outs: {
     valueType: string; amount: string | null; locktime: string;
     genesisHash: string | null; scriptPublicKey: string | null; itemMetadata: string | null; n: number;
@@ -142,15 +148,40 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
     .where(inArray(transaction.hash, hashes));
   const ins = await db.select().from(txIn).where(inArray(txIn.txHash, hashes));
   const outs = await db.select().from(txOut).where(inArray(txOut.txHash, hashes));
+  const expanded = await db
+    .select({
+      txHash: txInExpanded.txHash,
+      previousOutTxHash: txInExpanded.previousOutTxHash,
+      previousOutTxN: txInExpanded.previousOutTxN,
+      fromAddress: txInExpanded.outScriptPublicKey,
+      amount: txOut.amount,
+    })
+    .from(txInExpanded)
+    .leftJoin(
+      txOut,
+      and(
+        eq(txOut.txHash, txInExpanded.previousOutTxHash),
+        eq(txOut.n, txInExpanded.previousOutTxN),
+      ),
+    )
+    .where(inArray(txInExpanded.txHash, hashes));
   const insByHash = groupBy(ins, (i) => i.txHash);
   const outsByHash = groupBy(outs, (o) => o.txHash);
+  const expandedByKey = new Map(
+    expanded.map((e) => [`${e.txHash}:${e.previousOutTxHash}:${e.previousOutTxN}`, e]),
+  );
   return txs.map((t) => ({
     blockHash: t.blockHash, hash: t.hash, version: t.version, timestamp: t.timestamp,
     fees: t.fees, druidInfo: t.druidInfo,
-    ins: (insByHash.get(t.hash) ?? []).map((i: TxIn) => ({
-      scriptSignature: i.scriptSignature,
-      previousOutTxHash: i.previousOutTxHash, previousOutTxN: i.previousOutTxN,
-    })),
+    ins: (insByHash.get(t.hash) ?? []).map((i: TxIn) => {
+      const resolved = expandedByKey.get(`${t.hash}:${i.previousOutTxHash}:${i.previousOutTxN}`);
+      return {
+        scriptSignature: i.scriptSignature,
+        previousOutTxHash: i.previousOutTxHash, previousOutTxN: i.previousOutTxN,
+        fromAddress: resolved?.fromAddress ?? null,
+        amount: resolved?.amount ?? null,
+      };
+    }),
     outs: (outsByHash.get(t.hash) ?? []).map((o: TxOut) => ({
       valueType: o.valueType, amount: o.amount, locktime: o.locktime,
       genesisHash: o.genesisHash, scriptPublicKey: o.scriptPublicKey,

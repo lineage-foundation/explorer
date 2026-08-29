@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createDb, type Database } from "./client.js";
-import { block, transaction, txIn, txOut, coinsHistory, circulatingSupply } from "./schema.js";
+import {
+  block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
+} from "./schema.js";
 import {
   getBlocks, getBlocksCount, getBlockByHashOrNumber, getBlockTransactions,
   getTransactions, getTransactionsCount, getTransactionByHash,
@@ -14,6 +16,7 @@ const db = () => handle.db;
 
 beforeAll(async () => {
   handle = createDb(URL);
+  await db().delete(txInExpanded);
   await db().delete(txIn);
   await db().delete(txOut);
   await db().delete(transaction);
@@ -28,11 +31,24 @@ beforeAll(async () => {
   await db().insert(transaction).values([
     { hash: "tx_1", blockHash: "b_hash_1", version: 1, coinbase: false },
     { hash: "tx_cb", blockHash: "b_hash_2", version: 1, coinbase: true },
+    { hash: "tx_2", blockHash: "b_hash_2", version: 1, coinbase: false },
   ]);
   await db().insert(txOut).values([
     { txId: 1, txHash: "tx_1", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr_1", n: 0 },
   ]);
-  await db().insert(txIn).values([{ txId: 1, txHash: "tx_1", scriptSignature: {} }]);
+  await db().insert(txIn).values([
+    { txId: 1, txHash: "tx_1", scriptSignature: {} },
+    {
+      txId: 3, txHash: "tx_2", scriptSignature: {},
+      previousOutTxHash: "tx_1", previousOutTxN: 0,
+    },
+  ]);
+  await db().insert(txInExpanded).values([
+    {
+      txId: 3, txHash: "tx_2", scriptSignature: {},
+      previousOutTxHash: "tx_1", previousOutTxN: 0, outScriptPublicKey: "addr_1",
+    },
+  ]);
   await db().insert(circulatingSupply).values([{ id: 1, circulatingSupply: "12345" }]);
 });
 
@@ -69,18 +85,33 @@ describe("read queries", () => {
 
   it("lists transactions excluding coinbase", async () => {
     const res = await getTransactions(db(), { limit: 10, offset: 0, order: "desc" });
-    expect(res.transactions.map((t) => t.hash)).toEqual(["tx_1"]);
-    expect(res.pagination.total).toBe(1);
+    expect(res.transactions.map((t) => t.hash)).toEqual(["tx_2", "tx_1"]);
+    expect(res.pagination.total).toBe(2);
   });
 
   it("counts all transactions including coinbase", async () => {
-    expect(await getTransactionsCount(db())).toBe(2);
+    expect(await getTransactionsCount(db())).toBe(3);
   });
 
   it("returns full transaction detail or null", async () => {
     const tx = await getTransactionByHash(db(), "tx_1");
     expect(tx?.outs[0]?.amount).toBe("500");
     expect(await getTransactionByHash(db(), "nope")).toBeNull();
+  });
+
+  it("resolves a spend transaction's input address and amount via tx_in_expanded", async () => {
+    const tx = await getTransactionByHash(db(), "tx_2");
+    expect(tx?.ins).toHaveLength(1);
+    expect(tx?.ins[0]?.fromAddress).toBe("addr_1");
+    expect(tx?.ins[0]?.amount).toBe("500");
+    expect(tx?.ins[0]?.previousOutTxHash).toBe("tx_1");
+    expect(tx?.ins[0]?.previousOutTxN).toBe(0);
+  });
+
+  it("leaves fromAddress and amount null for an unresolved input", async () => {
+    const tx = await getTransactionByHash(db(), "tx_1");
+    expect(tx?.ins[0]?.fromAddress).toBeNull();
+    expect(tx?.ins[0]?.amount).toBeNull();
   });
 
   it("computes account balance from unspent outputs", async () => {
