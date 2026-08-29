@@ -1,13 +1,42 @@
 import "./globals.css";
 import type { ReactNode } from "react";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { TOKEN_DISPLAY_NAME } from "@explorer/config";
+import { SiteHeader } from "./components/SiteHeader.js";
+import { SiteFooter } from "./components/SiteFooter.js";
 
-export const metadata = { title: `${TOKEN_DISPLAY_NAME} Explorer` };
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-inter",
+  display: "swap",
+});
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
+
+export const metadata = {
+  title: `${TOKEN_DISPLAY_NAME} Explorer`,
+  description: `Explore blocks, transactions, and addresses on ${TOKEN_DISPLAY_NAME}.`,
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
+      <body className="min-h-screen">
+        <SiteHeader />
+        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">{children}</main>
+        <SiteFooter />
+      </body>
     </html>
   );
 }
