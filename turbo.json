@@ -2,7 +2,30 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**"] },
-    "dev": { "cache": false, "persistent": true },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "LINEAGE_STORAGE_NODE_URL",
+        "LINEAGE_MEMPOOL_NODE_URL",
+        "LINEAGE_ISSUED_SUPPLY_URL",
+        "LINEAGE_TOTAL_SUPPLY_URL",
+        "INDEXER_GENESIS_HEIGHT",
+        "INDEXER_MAX_BLOCK_RANGE",
+        "INDEXER_POLL_INTERVAL_MS",
+        "INDEXER_TX_HTTP_BATCH",
+        "INDEXER_TX_HTTP_CONCURRENCY",
+        "INDEXER_TX_HTTP_INTER_BATCH_DELAY_MS",
+        "SUPPLY_CRON_INTERVAL_MS",
+        "INDEXER_SKIP_TX_HASHES",
+        "INDEXER_LOCK_ON_BUSY",
+        "HEALTH_PORT",
+        "LOG_LEVEL",
+        "TOKEN_TICKER",
+        "TOKEN_DISPLAY_NAME"
+      ]
+    },
     "lint": { "dependsOn": ["^build"] },
     "typecheck": { "dependsOn": ["^build"] },
     "test": {

@@ -13,10 +13,15 @@ services:
       timeout: 5s
       retries: 5
 
+  # The `web` and `indexer` services below are for running the whole explorer in
+  # Docker. They are self-contained: they use the internal `postgres` service and
+  # reach the ../fleet node on the host via host.docker.internal (fleet runs in
+  # its own compose project). This is independent of the root `.env`, which
+  # configures host-run `pnpm dev` instead.
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgres://explorer:explorer@postgres:5432/explorer
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -24,8 +29,12 @@ services:
   indexer:
     build: { context: ., dockerfile: apps/indexer/Dockerfile }
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      LINEAGE_STORAGE_NODE_URL: ${LINEAGE_STORAGE_NODE_URL}
+      DATABASE_URL: postgres://explorer:explorer@postgres:5432/explorer
+      LINEAGE_STORAGE_NODE_URL: http://host.docker.internal:3001
+      LINEAGE_MEMPOOL_NODE_URL: http://host.docker.internal:3003
+      HEALTH_PORT: "8090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres: { condition: service_healthy }
 
