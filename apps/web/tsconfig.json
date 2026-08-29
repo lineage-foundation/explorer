@@ -26,6 +26,8 @@
     "app",
     "lib",
     "test",
+    "e2e",
+    "playwright.config.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [

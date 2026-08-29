@@ -6,3 +6,6 @@ coverage
 *.tsbuildinfo
 .env
 .env.local
+playwright-report
+test-results
+blob-report
