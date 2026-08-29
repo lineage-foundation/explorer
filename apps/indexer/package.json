@@ -14,6 +14,7 @@
     "@explorer/chain": "workspace:*",
     "@explorer/config": "workspace:*",
     "@explorer/db": "workspace:*",
+    "drizzle-orm": "^0.33.0",
     "pino": "^9.4.0"
   },
   "devDependencies": {
