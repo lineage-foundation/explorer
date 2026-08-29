@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TOKEN_DISPLAY_NAME } from "@explorer/config";
+import { SearchBar } from "./SearchBar.js";
 
 export function SiteHeader() {
   return (
@@ -19,12 +20,7 @@ export function SiteHeader() {
           </Link>
         </nav>
         <div className="ml-auto w-full max-w-sm">
-          {/* SearchBar mounts here in Task 5 */}
-          <input
-            disabled
-            placeholder="Search block / tx / address…"
-            className="w-full rounded-md border border-border bg-bg-raised px-3 py-2 font-mono text-xs text-text-subtle"
-          />
+          <SearchBar />
         </div>
       </div>
     </header>
