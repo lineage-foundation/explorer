@@ -1,12 +1,12 @@
+import { NextResponse } from "next/server";
 import {
   getBlocks, getTransactions, getBlocksCount, getTransactionsCount, getCirculatingSupply,
 } from "@explorer/db";
-import { getDb } from "../lib/db.js";
-import { LatestFeed } from "./components/LatestFeed.js";
+import { getDb } from "../../../lib/db.js";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export async function GET(): Promise<NextResponse> {
   const { db } = getDb();
   const [{ blocks }, { transactions }, blocksCount, txCount, supply] = await Promise.all([
     getBlocks(db, { limit: 6 }),
@@ -15,11 +15,7 @@ export default async function Home() {
     getTransactionsCount(db),
     getCirculatingSupply(db),
   ]);
-  return (
-    <LatestFeed
-      initial={{
-        blocks, txs: transactions, blocksCount, txCount, circulatingSupply: supply.circulatingSupply,
-      }}
-    />
-  );
+  return NextResponse.json({
+    blocks, txs: transactions, blocksCount, txCount, circulatingSupply: supply.circulatingSupply,
+  });
 }
