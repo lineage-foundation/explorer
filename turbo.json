@@ -5,7 +5,11 @@
     "dev": { "cache": false, "persistent": true },
     "lint": { "dependsOn": ["^build"] },
     "typecheck": { "dependsOn": ["^build"] },
-    "test": { "dependsOn": ["^build"] },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "passThroughEnv": ["TEST_DATABASE_URL", "DATABASE_URL"]
+    },
     "db:generate": { "cache": false },
     "db:migrate": { "cache": false }
   }
