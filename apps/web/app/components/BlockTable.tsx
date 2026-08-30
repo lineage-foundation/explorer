@@ -14,7 +14,7 @@ export function BlockTable({ blocks }: { blocks: BlockListItem[] }) {
         <col style={{ width: "16%" }} />
         <col style={{ width: "24%" }} />
       </colgroup>
-      <THead><TR><TH>Block</TH><TH>Hash</TH><TH right>Txns</TH><TH right>Age</TH></TR></THead>
+      <THead><TR><TH>Block</TH><TH>Hash</TH><TH>Txns</TH><TH>Age</TH></TR></THead>
       <TBody>
         {blocks.map((b) => (
           <TR key={b.hash}>
@@ -28,8 +28,8 @@ export function BlockTable({ blocks }: { blocks: BlockListItem[] }) {
                 <Mono>{truncateHash(b.hash)}</Mono>
               </Link>
             </TD>
-            <TD right><Mono>{b.nbTx ?? 0}</Mono></TD>
-            <TD right><span suppressHydrationWarning className="text-text-muted">{relativeTime(b.timestamp)}</span></TD>
+            <TD><Mono>{b.nbTx ?? 0}</Mono></TD>
+            <TD><span suppressHydrationWarning className="text-text-muted">{relativeTime(b.timestamp)}</span></TD>
           </TR>
         ))}
       </TBody>

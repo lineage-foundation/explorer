@@ -59,6 +59,12 @@ export function LatestFeed({ initial }: { initial: Snapshot }) {
             <Link href="/blocks" className="text-sm text-link hover:text-link-hover">View all →</Link>
           </div>
           <BlockTable blocks={snap.blocks} />
+          <Link
+            href="/blocks"
+            className="mt-2 block rounded-lg border border-border px-4 py-2.5 text-center text-sm text-text-muted hover:bg-surface-2/50 hover:text-text"
+          >
+            View all blocks →
+          </Link>
         </section>
         <section>
           <div className="mb-2 flex items-baseline justify-between">
@@ -66,6 +72,12 @@ export function LatestFeed({ initial }: { initial: Snapshot }) {
             <Link href="/transactions" className="text-sm text-link hover:text-link-hover">View all →</Link>
           </div>
           <TxTable txs={snap.txs} />
+          <Link
+            href="/transactions"
+            className="mt-2 block rounded-lg border border-border px-4 py-2.5 text-center text-sm text-text-muted hover:bg-surface-2/50 hover:text-text"
+          >
+            View all transactions →
+          </Link>
         </section>
       </div>
     </div>

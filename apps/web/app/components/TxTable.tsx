@@ -14,7 +14,7 @@ export function TxTable({ txs }: { txs: TxListItem[] }) {
         <col style={{ width: "16%" }} />
         <col style={{ width: "24%" }} />
       </colgroup>
-      <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Type</TH><TH right>Age</TH></TR></THead>
+      <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Type</TH><TH>Age</TH></TR></THead>
       <TBody>
         {txs.map((t) => {
           const label = txTypeLabel(t.txType, false);
@@ -31,7 +31,7 @@ export function TxTable({ txs }: { txs: TxListItem[] }) {
                 </Link>
               </TD>
               <TD><Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill></TD>
-              <TD right><span suppressHydrationWarning className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
+              <TD><span suppressHydrationWarning className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
             </TR>
           );
         })}
