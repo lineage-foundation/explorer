@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truncateHash, formatLngx, txTypeLabel, relativeTime } from "../format.js";
+import { truncateHash, formatLngx, txTypeLabel, relativeTime, absoluteTime } from "../format.js";
 
 describe("format", () => {
   it("truncates a hash keeping lead and tail", () => {
@@ -26,5 +26,9 @@ describe("format", () => {
     expect(relativeTime(null)).toBe("—");
     const d = new Date(Date.now() - 5000);
     expect(relativeTime(d)).toMatch(/s ago$/);
+  });
+  it("treats the genesis epoch-0 timestamp as unset", () => {
+    expect(relativeTime(new Date(0))).toBe("—");
+    expect(absoluteTime(new Date(0))).toBe("—");
   });
 });

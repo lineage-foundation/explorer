@@ -104,7 +104,11 @@ export async function getBlockTransactions(
 }
 
 export async function getTransactionsCount(db: Database): Promise<number> {
-  const [row] = await db.select({ value: count() }).from(transaction);
+  // Excludes coinbase (mining) transactions so the surfaced "transactions"
+  // count matches the transactions list, which also hides them. Otherwise a
+  // per-block mining tx inflates the total (one per block).
+  const [row] = await db
+    .select({ value: count() }).from(transaction).where(eq(transaction.coinbase, false));
   return row?.value ?? 0;
 }
 

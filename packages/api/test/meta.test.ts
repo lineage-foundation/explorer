@@ -30,7 +30,7 @@ describe("meta routes", () => {
       blocks: number;
       transactions: number;
     };
-    expect(body).toMatchObject({ network: "Lineage", ticker: "LNGX", height: 2, blocks: 2, transactions: 3 });
+    expect(body).toMatchObject({ network: "Lineage", ticker: "LNGX", height: 2, blocks: 2, transactions: 2 });
   });
 
   it("serves an OpenAPI 3.1 document covering every path", async () => {

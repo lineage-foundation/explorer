@@ -6,7 +6,8 @@ export function truncateHash(hash: string, lead = 6, tail = 4): string {
 }
 
 export function relativeTime(date: Date | null): string {
-  if (!date) return "—";
+  // Epoch 0 is the genesis sentinel (block 0 has timestamp 0), not a real time.
+  if (!date || date.getTime() === 0) return "—";
   const secs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
   if (secs < 60) return `${secs}s ago`;
   const mins = Math.floor(secs / 60);
@@ -21,7 +22,9 @@ export function relativeTime(date: Date | null): string {
 }
 
 export function absoluteTime(date: Date | null): string {
-  return date ? date.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC") : "—";
+  return date && date.getTime() !== 0
+    ? date.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC")
+    : "—";
 }
 
 export function txTypeLabel(

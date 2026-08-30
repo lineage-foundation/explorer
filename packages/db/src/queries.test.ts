@@ -97,8 +97,8 @@ describe("read queries", () => {
     expect(res.pagination.total).toBe(2);
   });
 
-  it("counts all transactions including coinbase", async () => {
-    expect(await getTransactionsCount(db())).toBe(3);
+  it("counts non-coinbase transactions", async () => {
+    expect(await getTransactionsCount(db())).toBe(2);
   });
 
   it("returns full transaction detail or null", async () => {
