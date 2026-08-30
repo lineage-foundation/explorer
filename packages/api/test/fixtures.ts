@@ -12,7 +12,7 @@ export async function seedFixtures(db: Database): Promise<void> {
   await db.delete(block);
 
   await db.insert(block).values([
-    { version: 1, num: 1, hash: "b_hash_1", timestamp: new Date("2024-01-01T00:00:00Z"), nbTx: 1 },
+    { version: 1, num: 1, hash: "b_hash_1", timestamp: new Date("2024-01-01T00:00:00Z"), nbTx: 1, bits: 486604799n },
     { version: 1, num: 2, hash: "b_hash_2", previousHash: "b_hash_1", timestamp: new Date("2024-01-02T00:00:00Z"), nbTx: 1 },
   ]);
   await db.insert(transaction).values([

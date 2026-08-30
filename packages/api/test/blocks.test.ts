@@ -25,9 +25,11 @@ describe("blocks routes", () => {
   it("returns a single block by number with bits as a string", async () => {
     const res = await app().request("/api/v1/blocks/1");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { num: number; hash: string; timestamp: string | null };
+    const body = (await res.json()) as { num: number; hash: string; timestamp: string | null; bits: string | null };
     expect(body).toMatchObject({ num: 1, hash: "b_hash_1" });
     expect(body.timestamp).toBe("2024-01-01T00:00:00.000Z");
+    expect(typeof body.bits).toBe("string");
+    expect(body.bits).toBe("486604799");
   });
 
   it("404s an unknown block as problem+json", async () => {
