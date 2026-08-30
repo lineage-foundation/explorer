@@ -3,13 +3,14 @@ import { cors } from "hono/cors";
 import type { Database } from "@explorer/db";
 import { ProblemError, problemJson } from "./problem.js";
 import { rateLimit, type RateLimitOptions } from "./rate-limit.js";
+import { registerBlocks } from "./routes/blocks.js";
 
 export interface ApiDeps {
   db: Database;
   rateLimit?: RateLimitOptions;
 }
 
-export function createApiApp({ db: _db, rateLimit: rl }: ApiDeps): OpenAPIHono {
+export function createApiApp({ db, rateLimit: rl }: ApiDeps): OpenAPIHono {
   const app = new OpenAPIHono({
     defaultHook: (result) => {
       if (!result.success) {
@@ -33,6 +34,8 @@ export function createApiApp({ db: _db, rateLimit: rl }: ApiDeps): OpenAPIHono {
   });
 
   app.notFound((c) => problemJson(c, 404, "Not Found", `No route for ${new URL(c.req.url).pathname}`));
+
+  registerBlocks(app, db);
 
   return app;
 }
