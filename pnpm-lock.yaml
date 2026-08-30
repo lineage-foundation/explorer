@@ -66,9 +66,6 @@ importers:
       '@explorer/ui':
         specifier: workspace:^
         version: link:../../packages/ui
-      bignumber.js:
-        specifier: ^11.1.5
-        version: 11.1.5
       hono:
         specifier: ^4.6.0
         version: 4.13.5
@@ -143,6 +140,12 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      eslint:
+        specifier: ^9.11.0
+        version: 9.39.5(jiti@2.7.0)
+      typescript-eslint:
+        specifier: ^8.7.0
+        version: 8.68.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       vitest:
         specifier: ^2.1.1
         version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(lightningcss@1.33.0)

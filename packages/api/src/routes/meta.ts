@@ -4,7 +4,7 @@ import type { Database } from "@explorer/db";
 import {
   getCirculatingSupply, getMaxBlockNum, getBlocksCount, getTransactionsCount,
 } from "@explorer/db";
-import { formatLngxPlain, TOKEN_TICKER, NETWORK_DISPLAY_NAME } from "@explorer/config";
+import { formatLngxPlain, TOKEN_TICKER, NETWORK_DISPLAY_NAME, PUBLIC_API_URL } from "@explorer/config";
 import { SupplySchema, StatusSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
 
@@ -52,7 +52,7 @@ export function registerMeta(app: OpenAPIHono, db: Database): void {
       version: "1.0.0",
       description: "Read-only public REST API for the Lineage block explorer.",
     },
-    servers: [{ url: "/" }],
+    servers: [{ url: PUBLIC_API_URL }],
   });
 
   app.get("/api/v1/docs", apiReference({ spec: { url: "/api/v1/openapi.json" } }));
