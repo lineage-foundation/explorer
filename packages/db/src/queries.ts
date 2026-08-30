@@ -17,7 +17,8 @@ export interface BlockTxItem {
   txType: string | undefined; coinbase: boolean;
 }
 export interface TxListItem {
-  hash: string; blockHash: string; version: number; timestamp: Date | null; txType: string | undefined;
+  hash: string; blockHash: string; blockNum: number; version: number;
+  timestamp: Date | null; txType: string | undefined;
 }
 export interface TxDetail {
   blockHash: string; hash: string; version: number; timestamp: Date | null;
@@ -127,7 +128,7 @@ export async function getTransactions(
   }
   const rows = await db
     .select({
-      hash: transaction.hash, blockHash: transaction.blockHash,
+      hash: transaction.hash, blockHash: transaction.blockHash, blockNum: block.num,
       version: transaction.version, timestamp: block.timestamp,
     })
     .from(transaction)
