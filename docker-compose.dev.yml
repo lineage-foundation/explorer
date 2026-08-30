@@ -1,0 +1,83 @@
+# Development stack with hot reload. The source is bind-mounted and the apps run
+# in watch mode (`next dev` / `tsx watch`), so code changes reflect live without
+# rebuilding images. node_modules live in named volumes (installed in-container
+# for the right platform), shadowing the host's.
+#
+# Usage (fleet must be running — see README):
+#   docker compose -f docker-compose.dev.yml up
+#   web → http://localhost:8080   indexer health → http://localhost:8090/health
+#
+# This is separate from docker-compose.yml (production-style images). Use this
+# one for iteration, that one for a production-like run.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-explorer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-explorer}
+      POSTGRES_DB: ${POSTGRES_DB:-explorer}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-explorer}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: postgres:16
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-explorer}
+    volumes:
+      - ./packages/db/drizzle:/migrations:ro
+    command: >-
+      sh -c 'set -e; for f in $$(ls /migrations/*.sql | sort); do echo "applying $$f";
+      psql -h postgres -U ${POSTGRES_USER:-explorer} -d ${POSTGRES_DB:-explorer} -v ON_ERROR_STOP=1 -f "$$f"; done'
+    restart: "no"
+
+  # Runs `turbo run dev` = the web app (next dev, :8080) + the indexer (tsx watch,
+  # health :8090) in one container. Reaches the ../fleet node on the host.
+  dev:
+    image: node:22-slim
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm exec turbo run dev"
+    environment:
+      DATABASE_URL: postgres://explorer:explorer@postgres:5432/explorer
+      LINEAGE_STORAGE_NODE_URL: http://host.docker.internal:3001
+      LINEAGE_MEMPOOL_NODE_URL: http://host.docker.internal:3003
+      HEALTH_PORT: "8090"
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Bind-mounts on macOS/Windows don't deliver inotify events; poll instead so
+      # Next.js (webpack) and the indexer (tsx/chokidar) detect file changes.
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    ports: ["8080:8080", "8090:8090"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+      - dev_root_modules:/app/node_modules
+      - dev_web_modules:/app/apps/web/node_modules
+      - dev_indexer_modules:/app/apps/indexer/node_modules
+      - dev_chain_modules:/app/packages/chain/node_modules
+      - dev_config_modules:/app/packages/config/node_modules
+      - dev_db_modules:/app/packages/db/node_modules
+      - dev_ui_modules:/app/packages/ui/node_modules
+      - dev_web_next:/app/apps/web/.next
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
+  dev_root_modules:
+  dev_web_modules:
+  dev_indexer_modules:
+  dev_chain_modules:
+  dev_config_modules:
+  dev_db_modules:
+  dev_ui_modules:
+  dev_web_next:

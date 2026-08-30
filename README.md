@@ -50,7 +50,22 @@ node, not the storage node — so `LINEAGE_MEMPOOL_NODE_URL` must be set for
 circulating supply to resolve. All other tunables (indexer batching, poll
 interval, log level, health port) are in `.env.example` with sane defaults.
 
-### Run everything in Docker (alternative)
+### Run in Docker with hot reload (`pnpm dev:docker`)
+
+```bash
+# fleet must be running (see step 1 above). Then:
+pnpm dev:docker            # docker compose -f docker-compose.dev.yml up
+```
+
+Runs Postgres + an auto-migrate step + a `dev` container that bind-mounts the
+source and runs `turbo run dev` (web on :8080, indexer health on :8090) in watch
+mode — **code changes reflect live**, no image rebuild. `node_modules` live in
+named volumes (installed in-container for the right platform); file changes are
+picked up via polling (Docker bind mounts don't deliver inotify events on
+macOS/Windows). Reaches the fleet node via `host.docker.internal:3001/3003`.
+First run installs deps in-container (slower); subsequent runs reuse the volumes.
+
+### Run everything in Docker (production-like)
 
 ```bash
 # fleet must be running (see step 1 above). Then:
@@ -83,6 +98,7 @@ is present on the network.
 | Script | Purpose |
 | --- | --- |
 | `pnpm dev` | Run indexer + web on the host (hot reload), loading `.env` |
+| `pnpm dev:docker` | Run the whole stack in Docker with hot reload |
 | `pnpm dev:db` / `pnpm dev:stop` | Start / stop the local Postgres container |
 | `pnpm db:migrate` | Apply the database schema |
 | `pnpm build` / `pnpm typecheck` / `pnpm lint` | Standard gates |

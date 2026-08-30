@@ -38,8 +38,8 @@ test("transaction with an item output shows an item tag", async ({ page }) => {
 test("address shows balance and history", async ({ page }) => {
   await page.goto("/address/addrB");
   await expect(page.getByText("Balance")).toBeVisible();
-  // Stat renders value and unit adjacently with no separating text node: "30LNGX".
-  await expect(page.getByText("30LNGX")).toBeVisible();
+  // Stat renders the value and unit with a space between them: "30 LNGX".
+  await expect(page.getByText("30 LNGX")).toBeVisible();
 });
 
 test("unknown id 404s", async ({ page }) => {

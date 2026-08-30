@@ -10,3 +10,4 @@ playwright-report
 test-results
 blob-report
 .superpowers
+.pnpm-store/

@@ -6,7 +6,12 @@ export function Stat({ label, value, unit }: { label: string; value: ReactNode; 
       <div className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-text-subtle">{label}</div>
       <div className="mt-1 font-display text-2xl font-semibold tabular-nums text-text">
         {value}
-        {unit ? <span className="ml-1 text-sm text-accent">{unit}</span> : null}
+        {unit ? (
+          <>
+            {" "}
+            <span className="text-sm text-accent">{unit}</span>
+          </>
+        ) : null}
       </div>
     </div>
   );
