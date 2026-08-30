@@ -2,6 +2,8 @@ import BigNumber from "bignumber.js";
 import type { LineageBlock, LineageNodeConfig, LineageTransaction } from "./types.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
+const MAX_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = 200;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,9 +16,48 @@ export class LineageNodeClient {
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
+  /**
+   * Fetch and JSON-parse a node response, tolerating the transient empty/error
+   * bodies the nodes occasionally return under load. A non-2xx status, an empty
+   * body, or invalid JSON is retried a few times with a short backoff; if it
+   * never resolves, we throw a descriptive error (label + url + status/snippet)
+   * rather than a bare `SyntaxError: Unexpected end of JSON input`, so a failing
+   * ingest cycle is diagnosable.
+   */
+  private async fetchJson<T>(
+    url: string,
+    init: RequestInit | undefined,
+    label: string,
+    timeoutMs?: number,
+  ): Promise<T> {
+    let lastError = "";
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const signal = timeoutMs !== undefined ? AbortSignal.timeout(timeoutMs) : undefined;
+        const res = await this.fetchImpl(url, signal ? { ...init, signal } : init);
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+        }
+        if (text.trim() === "") {
+          throw new Error(`empty response body (HTTP ${res.status})`);
+        }
+        return JSON.parse(text) as T;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        if (attempt < MAX_ATTEMPTS) await delay(RETRY_BACKOFF_MS * attempt);
+      }
+    }
+    throw new Error(`${label} request to ${url} failed after ${MAX_ATTEMPTS} attempts: ${lastError}`);
+  }
+
   async getLatestBlock(): Promise<LineageBlock> {
-    const res = await this.fetchImpl(`${this.config.storageNodeUrl}/latest_block`);
-    const data = (await res.json()) as { content: { block: LineageBlock } };
+    const data = await this.fetchJson<{ content: { block: LineageBlock } }>(
+      `${this.config.storageNodeUrl}/latest_block`,
+      undefined,
+      "getLatestBlock",
+      15000,
+    );
     return data.content.block;
   }
 
@@ -25,22 +66,22 @@ export class LineageNodeClient {
     endBlock: number,
   ): Promise<[string, Record<"block", LineageBlock>][]> {
     const blocks = [...Array(endBlock - startBlock + 1).keys()].map((b) => b + startBlock);
-    const res = await this.fetchImpl(`${this.config.storageNodeUrl}/block_by_num`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: JSON.stringify(blocks),
-    });
-    const data = (await res.json()) as { content: [string, Record<"block", LineageBlock>][] };
+    const data = await this.fetchJson<{ content: [string, Record<"block", LineageBlock>][] }>(
+      `${this.config.storageNodeUrl}/block_by_num`,
+      { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(blocks) },
+      "getBlockRange",
+      30000,
+    );
     return data.content;
   }
 
   async getTransactionByHash(hash: string): Promise<[[string, LineageTransaction]]> {
-    const res = await this.fetchImpl(`${this.config.storageNodeUrl}/blockchain_entry`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: `"${hash}"`,
-    });
-    const data = (await res.json()) as { content: [[string, LineageTransaction]] };
+    const data = await this.fetchJson<{ content: [[string, LineageTransaction]] }>(
+      `${this.config.storageNodeUrl}/blockchain_entry`,
+      { method: "POST", headers: JSON_HEADERS, body: `"${hash}"` },
+      "getTransactionByHash",
+      30000,
+    );
     return data.content;
   }
 
@@ -73,13 +114,12 @@ export class LineageNodeClient {
   private async fetchBatch(batchHashes: string[]): Promise<[string, LineageTransaction][]> {
     try {
       const body = `[${batchHashes.map((h) => `"${h}"`).join(",")}]`;
-      const res = await this.fetchImpl(`${this.config.storageNodeUrl}/blockchain_entry`, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body,
-        signal: AbortSignal.timeout(30000),
-      });
-      const data = (await res.json()) as { content: [string, LineageTransaction][] };
+      const data = await this.fetchJson<{ content: [string, LineageTransaction][] }>(
+        `${this.config.storageNodeUrl}/blockchain_entry`,
+        { method: "POST", headers: JSON_HEADERS, body },
+        "fetchBatch",
+        30000,
+      );
       return data.content;
     } catch {
       return [];

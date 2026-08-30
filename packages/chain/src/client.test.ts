@@ -41,6 +41,34 @@ describe("LineageNodeClient", () => {
     expect(result).toEqual([["h1", { inputs: [] }]]);
   });
 
+  it("retries a transient empty body and then succeeds", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response("", { status: 200 }))
+      .mockResolvedValueOnce(
+        jsonResponse({ content: { block: { header: { b_num: 7 }, transactions: [] } } }),
+      );
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    const block = await client.getLatestBlock();
+    expect(block.header.b_num).toBe(7);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws a descriptive error (not a raw SyntaxError) when the body stays empty", async () => {
+    // A fresh Response per call — a real fetch never hands back a re-read body.
+    const fetchImpl = vi.fn().mockImplementation(() => new Response("", { status: 200 }));
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    await expect(client.getLatestBlock()).rejects.toThrow(
+      /getLatestBlock request to http:\/\/node\/latest_block failed after 3 attempts: empty response body \(HTTP 200\)/,
+    );
+    await expect(client.getLatestBlock()).rejects.not.toThrow(/Unexpected end of JSON input/);
+  });
+
+  it("surfaces a non-2xx status with a body snippet", async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => new Response("upstream down", { status: 502 }));
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    await expect(client.getBlockRange(1, 1)).rejects.toThrow(/HTTP 502: upstream down/);
+  });
+
   it("parses issued supply from text with bignumber safety", async () => {
     const big = "90000000000000000000";
     const fetchImpl = vi.fn().mockResolvedValue(
