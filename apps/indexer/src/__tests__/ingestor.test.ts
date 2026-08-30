@@ -10,10 +10,10 @@ let handle: { db: Database; close: () => Promise<void> };
 const db = () => handle.db;
 const cfg = () => loadConfig({ DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", INDEXER_MAX_BLOCK_RANGE: "10" });
 
-function chainOf(n: number, source: FakeSourceClient) {
+function chainOf(n: number, source: FakeSourceClient, prefix = "H") {
   let prev = "";
   for (let i = 0; i <= n; i++) {
-    const hash = `H${i}`, cb = `cb${i}`, t = `t${i}`;
+    const hash = `${prefix}${i}`, cb = `cb${prefix}${i}`, t = `t${prefix}${i}`;
     source.addBlock(hash, buildBlock({ num: i, hash, previousHash: prev, miningTxHash: cb, txHashes: [t] }));
     source.addTx(cb, buildTokenTx([{ address: "M", amount: 50 }]));
     source.addTx(t, buildTokenTx([{ address: `addr${i}`, amount: 10 }]));
@@ -44,6 +44,48 @@ it("resumes from max(num)+1 and is idempotent", async () => {
   await ing.runCycle();
   await ing.runCycle(); // no new blocks; no duplicates
   expect((await getBlocks(db(), { limit: 100, offset: 0, order: "asc" })).blocks).toHaveLength(3);
+});
+
+it("resyncs from genesis when the source resets to a shorter, different chain", async () => {
+  const source = new FakeSourceClient(); chainOf(5, source);
+  await createIngestor({ db: db(), source, config: cfg(), logger: noopLogger }).runCycle();
+  expect(await getMaxBlockNum(db())).toBe(5);
+
+  // Source wiped and re-genesised: a brand-new chain only 2 blocks tall.
+  const fresh = new FakeSourceClient(); chainOf(2, fresh, "R");
+  const res = await createIngestor({ db: db(), source: fresh, config: cfg(), logger: noopLogger }).runCycle();
+  expect(res.caughtUp).toBe(false);
+  const blocks = (await getBlocks(db(), { limit: 100, offset: 0, order: "asc" })).blocks;
+  expect(blocks.map((b) => b.num)).toEqual([0, 1, 2]);
+  expect(blocks.map((b) => b.hash)).toEqual(["R0", "R1", "R2"]);
+});
+
+it("resyncs when the source reorgs to a same-height chain with different hashes", async () => {
+  const source = new FakeSourceClient(); chainOf(3, source);
+  await createIngestor({ db: db(), source, config: cfg(), logger: noopLogger }).runCycle();
+  expect(await getMaxBlockNum(db())).toBe(3);
+
+  const forked = new FakeSourceClient(); chainOf(3, forked, "F");
+  await createIngestor({ db: db(), source: forked, config: cfg(), logger: noopLogger }).runCycle();
+  const blocks = (await getBlocks(db(), { limit: 100, offset: 0, order: "asc" })).blocks;
+  expect(blocks.map((b) => b.hash)).toEqual(["F0", "F1", "F2", "F3"]);
+});
+
+it("does not wipe indexed data when the tip probe is momentarily inconclusive", async () => {
+  const source = new FakeSourceClient(); chainOf(3, source);
+  await createIngestor({ db: db(), source, config: cfg(), logger: noopLogger }).runCycle();
+  expect(await getMaxBlockNum(db())).toBe(3);
+
+  // Source still claims height 3 but returns nothing for the tip probe (blip).
+  const flaky = {
+    getLatestBlock: () => source.getLatestBlock(),
+    getBlockRange: (s: number, e: number) => (s === 3 && e === 3 ? Promise.resolve([]) : source.getBlockRange(s, e)),
+    getTransactionsByHash: (h: string[]) => source.getTransactionsByHash(h),
+    getCirculatingSupply: () => source.getCirculatingSupply(),
+  };
+  const res = await createIngestor({ db: db(), source: flaky, config: cfg(), logger: noopLogger }).runCycle();
+  expect(res.caughtUp).toBe(true);
+  expect(await getMaxBlockNum(db())).toBe(3); // untouched, no destructive wipe
 });
 
 it("halts with ContinuityError on a previous_hash mismatch", async () => {

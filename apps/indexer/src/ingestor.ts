@@ -1,5 +1,5 @@
 import type { Database } from "@explorer/db";
-import { getMaxBlockNum, getBlockHashByNum } from "@explorer/db";
+import { getMaxBlockNum, getBlockHashByNum, resetIndexedChain } from "@explorer/db";
 import type { LineageBlock } from "@explorer/chain";
 import type { IndexerConfig } from "./config.js";
 import type { SourceClient } from "./source.js";
@@ -26,9 +26,24 @@ export function createIngestor(deps: {
 
   return {
     async runCycle() {
-      const maxNum = await getMaxBlockNum(db);
-      const from = maxNum === null ? config.genesisHeight : maxNum + 1;
+      const storedMax = await getMaxBlockNum(db);
       const latest = (await source.getLatestBlock()).header.b_num;
+
+      // Detect a diverged source chain (reset or reorg) before advancing. The
+      // ingestor otherwise assumes monotonic forward growth: after a reset it
+      // would see stored tip > source tip, report "caught up", and stall on
+      // stale data forever. On confirmed divergence, resync from genesis.
+      let maxNum = storedMax;
+      if (storedMax !== null && (await sourceDiverged(db, source, storedMax, latest))) {
+        logger.warn(
+          { event: "chain.reset", storedMax, sourceLatest: latest },
+          "source chain diverged from indexed data — resyncing from genesis",
+        );
+        await resetIndexedChain(db);
+        maxNum = null;
+      }
+
+      const from = maxNum === null ? config.genesisHeight : maxNum + 1;
       if (from > latest) return { caughtUp: true };
 
       const to = Math.min(from + config.maxBlockRange - 1, latest);
@@ -52,6 +67,26 @@ export function createIngestor(deps: {
       return { caughtUp: false, processedTo: to };
     },
   };
+}
+
+/**
+ * Whether the source chain has diverged from our indexed data — i.e. our stored
+ * tip is no longer part of the source's chain. Because a block's hash commits to
+ * its entire ancestry, a matching hash at the stored tip means every ancestor
+ * matches too, so this single comparison detects any reset or reorg within our
+ * range. Returns true ONLY on positive evidence (source shorter than our tip, or
+ * a confirmed differing hash) — an inconclusive/absent response never triggers a
+ * wipe, so a transient node blip cannot destroy indexed data.
+ */
+async function sourceDiverged(
+  db: Database, source: SourceClient, storedMax: number, latest: number,
+): Promise<boolean> {
+  if (latest < storedMax) return true;
+  const [entry] = await source.getBlockRange(storedMax, storedMax);
+  const sourceHash = entry?.[0];
+  if (sourceHash === undefined) return false; // inconclusive — do not wipe
+  const storedHash = await getBlockHashByNum(db, storedMax);
+  return sourceHash !== storedHash;
 }
 
 async function ingestOne(

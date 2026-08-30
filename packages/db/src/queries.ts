@@ -286,6 +286,19 @@ export async function getBlockHashByNum(db: Database, num: number): Promise<stri
   return row?.hash ?? null;
 }
 
+/**
+ * Clear all indexed chain data (blocks, transactions and their in/out rows, and
+ * the balance-tracking coins_history) so the indexer can rebuild from genesis
+ * after the source chain diverges — a reset or reorg. `circulating_supply` is
+ * maintained separately by the supply cron and is deliberately left intact.
+ */
+export async function resetIndexedChain(db: Database): Promise<void> {
+  await db.execute(sql`
+    TRUNCATE TABLE ${txInExpanded}, ${txIn}, ${txOut}, ${coinsHistory}, ${transaction}, ${block}
+    RESTART IDENTITY CASCADE
+  `);
+}
+
 export async function getLatestCoinsHistoryOutIds(db: Database, address: string): Promise<number[]> {
   const [row] = await db
     .select({ outIds: coinsHistory.outIds })
