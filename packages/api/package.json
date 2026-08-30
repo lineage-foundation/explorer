@@ -1,0 +1,22 @@
+{
+  "name": "@explorer/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@explorer/config": "workspace:^",
+    "@explorer/db": "workspace:^",
+    "@hono/zod-openapi": "^0.18.0",
+    "@scalar/hono-api-reference": "^0.5.0",
+    "hono": "^4.6.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.1"
+  }
+}
