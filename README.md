@@ -52,10 +52,31 @@ interval, log level, health port) are in `.env.example` with sane defaults.
 
 ### Run everything in Docker (alternative)
 
-`docker compose up` builds and runs `web` + `indexer` + `postgres` in containers.
-Those services are self-contained: they use the internal `postgres` service and
-reach the fleet node on the host via `host.docker.internal:3001/3003` — no `.env`
-required. Use this for a production-like local run; use `pnpm dev` for iteration.
+```bash
+# fleet must be running (see step 1 above). Then:
+docker compose up          # builds + runs postgres, migrate, web, indexer
+```
+
+`web` + `indexer` + `postgres` run in containers, self-contained: they use the
+internal `postgres` service and reach the fleet node on the host via
+`host.docker.internal:3001/3003` — no `.env` required. A one-shot `migrate`
+service applies the schema before `web`/`indexer` start, so the stack comes up
+ready. Use this for a production-like local run; use `pnpm dev` for iteration.
+
+### Migrations & the `postgres` hostname
+
+- **Host dev (`pnpm dev`):** run `pnpm db:migrate` once (it uses `.env`'s
+  `DATABASE_URL`, i.e. `localhost:5432` — the Postgres started by `pnpm dev:db`).
+- **Docker (`docker compose up`):** migrations run automatically via the
+  `migrate` service — nothing to do.
+
+The hostname `postgres` in `docker-compose.yml` only resolves **inside** the
+compose network (that is how `web`/`indexer` reach the DB). If you see
+`getaddrinfo ENOTFOUND postgres`, a process **outside** that network is trying to
+use it — e.g. running `pnpm db:migrate` on the host with a stale `.env`, or
+starting `web`/`indexer` without the `postgres` service. From the host, always
+use `localhost:5432`; run the full `docker compose up` so the `postgres` service
+is present on the network.
 
 ## Scripts
 

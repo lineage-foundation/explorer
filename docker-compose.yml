@@ -13,11 +13,26 @@ services:
       timeout: 5s
       retries: 5
 
-  # The `web` and `indexer` services below are for running the whole explorer in
-  # Docker. They are self-contained: they use the internal `postgres` service and
-  # reach the ../fleet node on the host via host.docker.internal (fleet runs in
-  # its own compose project). This is independent of the root `.env`, which
-  # configures host-run `pnpm dev` instead.
+  # One-shot: create/update the schema by applying the committed, idempotent,
+  # correctly-ordered migration SQL via psql (no extra tooling needed). Runs
+  # once and exits; web/indexer wait for it to complete.
+  migrate:
+    image: postgres:16
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-explorer}
+    volumes:
+      - ./packages/db/drizzle:/migrations:ro
+    command: >-
+      sh -c 'set -e; for f in $$(ls /migrations/*.sql | sort); do echo "applying $$f";
+      psql -h postgres -U ${POSTGRES_USER:-explorer} -d ${POSTGRES_DB:-explorer} -v ON_ERROR_STOP=1 -f "$$f"; done'
+    restart: "no"
+
+  # The `web` and `indexer` services run the whole explorer in Docker. They are
+  # self-contained: internal `postgres` service + the ../fleet node reached on
+  # the host via host.docker.internal (fleet runs in its own compose project).
+  # Independent of the root `.env`, which configures host-run `pnpm dev` instead.
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     environment:
@@ -25,6 +40,7 @@ services:
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
 
   indexer:
     build: { context: ., dockerfile: apps/indexer/Dockerfile }
@@ -37,6 +53,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
 
 volumes:
   pgdata:
