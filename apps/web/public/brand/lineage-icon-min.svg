@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Lineage">
+  <title>Lineage</title>
+  <!-- 16px-min glyph, transparent ground, converged centre, flat brand colours. -->
+  <path d="M4,7 L16,16 L28,7 L24,3.5 L16,11.5 L8,3.5 Z M4,25 L16,16 L28,25 L24,28.5 L16,20.5 L8,28.5 Z" fill="#5ad0e6"/>
+  <path d="M7,4 L16,16 L7,28 L3.5,24 L11.5,16 L3.5,8 Z M25,4 L16,16 L25,28 L28.5,24 L20.5,16 L28.5,8 Z" fill="#52e3a8"/>
+</svg>

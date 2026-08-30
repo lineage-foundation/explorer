@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="128" height="128" role="img" aria-label="Lineage">
+  <title>Lineage</title>
+  <!-- Single-colour knockout. Inherits currentColor so it adopts the surrounding text
+       colour; falls back to near-white. Open centre preserved at display sizes. -->
+  <g fill="currentColor" color="#e6f4f1">
+    <path d="M6,7 L16,15 L26,7 L24.6,5.8 L16,13 L7.4,5.8 Z M6,25 L16,17 L26,25 L24.6,26.2 L16,19 L7.4,26.2 Z"/>
+    <path d="M7,6 L15,16 L7,26 L5.4,24.6 L12,16 L5.4,7.4 Z M25,6 L17,16 L25,26 L26.6,24.6 L20,16 L26.6,7.4 Z"/>
+  </g>
+</svg>

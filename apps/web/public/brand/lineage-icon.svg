@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="180" height="180" role="img" aria-label="Lineage app icon">
+  <title>Lineage</title>
+  <defs>
+    <linearGradient id="lin-plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="oklch(20% 0.03 198)"/>
+      <stop offset="1" stop-color="oklch(13% 0.02 200)"/>
+    </linearGradient>
+    <radialGradient id="lin-plate-glow" cx="32%" cy="22%" r="70%">
+      <stop offset="0" stop-color="oklch(30% 0.06 185 / .55)"/>
+      <stop offset="100%" stop-color="oklch(30% 0.06 185 / 0)"/>
+    </radialGradient>
+    <radialGradient id="lin-i-c" cx="50%" cy="50%" r="58%">
+      <stop offset="0" stop-color="oklch(92% 0.13 205)"/>
+      <stop offset="1" stop-color="oklch(72% 0.12 220)"/>
+    </radialGradient>
+    <radialGradient id="lin-i-a" cx="50%" cy="50%" r="58%">
+      <stop offset="0" stop-color="oklch(93% 0.16 167)"/>
+      <stop offset="1" stop-color="oklch(78% 0.15 160)"/>
+    </radialGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#lin-plate)" stroke="oklch(38% 0.026 200)" stroke-width="1"/>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#lin-plate-glow)"/>
+  <!-- mark scaled into a 32→44 box, centred -->
+  <g transform="translate(10,10) scale(1.375)">
+    <path d="M6,7 L16,15 L26,7 L24.6,5.8 L16,13 L7.4,5.8 Z M6,25 L16,17 L26,25 L24.6,26.2 L16,19 L7.4,26.2 Z" fill="url(#lin-i-c)"/>
+    <path d="M7,6 L15,16 L7,26 L5.4,24.6 L12,16 L5.4,7.4 Z M25,6 L17,16 L25,26 L26.6,24.6 L20,16 L26.6,7.4 Z" fill="url(#lin-i-a)"/>
+  </g>
+</svg>

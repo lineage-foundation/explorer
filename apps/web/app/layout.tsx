@@ -27,6 +27,16 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata = {
   title: `${TOKEN_DISPLAY_NAME} Explorer`,
   description: `Explore blocks, transactions, and addresses on ${TOKEN_DISPLAY_NAME}.`,
+  icons: {
+    icon: [
+      { url: "/brand/favicon.svg", type: "image/svg+xml" },
+      { url: "/images/lineage-favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/images/lineage-favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/images/lineage-favicon-48x48.png", sizes: "48x48", type: "image/png" },
+      { url: "/images/lineage-favicon-192x192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/images/lineage-favicon-180x180.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
