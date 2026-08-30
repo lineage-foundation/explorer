@@ -41,11 +41,10 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
         </div>
       </div>
       <Card className="p-4">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <MetaItem label="Block"><Link href={`/block/${tx.blockHash}`} className="text-link hover:text-link-hover">{block ? `#${block.num.toLocaleString()}` : "—"}</Link></MetaItem>
           <MetaItem label="Timestamp">{absoluteTime(tx.timestamp)} <span className="text-text-subtle">({relativeTime(tx.timestamp)})</span></MetaItem>
           <MetaItem label="Version">{tx.version}</MetaItem>
-          <MetaItem label="Fees">{typeof tx.fees === "number" || typeof tx.fees === "string" ? String(tx.fees) : "—"}</MetaItem>
         </div>
       </Card>
       <InputsOutputs tx={tx} coinbase={coinbase} />

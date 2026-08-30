@@ -77,10 +77,18 @@ describe("read queries", () => {
     expect(await getBlockByHashOrNumber(db(), "b_hash_missing")).toBeNull();
   });
 
-  it("returns a block's non-coinbase transactions with first-output type", async () => {
+  it("returns a block's transactions with first-output type", async () => {
     const res = await getBlockTransactions(db(), "1");
     expect(res?.transactions).toHaveLength(1);
     expect(res?.transactions[0]?.txType).toBe("token");
+    expect(res?.transactions[0]?.coinbase).toBe(false);
+  });
+
+  it("includes the coinbase transaction, ordered first", async () => {
+    const res = await getBlockTransactions(db(), "2");
+    expect(res?.transactions.map((t) => t.hash)).toEqual(["tx_cb", "tx_2"]);
+    expect(res?.transactions[0]?.coinbase).toBe(true);
+    expect(res?.transactions[1]?.coinbase).toBe(false);
   });
 
   it("lists transactions excluding coinbase", async () => {

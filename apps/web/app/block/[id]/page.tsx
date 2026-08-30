@@ -57,13 +57,13 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
       <section>
         <h2 className="mb-2 font-display text-lg text-text">Transactions</h2>
         {txs.length === 0
-          ? <EmptyState title="No non-coinbase transactions in this block" />
+          ? <EmptyState title="No transactions in this block" />
           : (
             <Table>
               <THead><TR><TH>Transaction</TH><TH>Type</TH></TR></THead>
               <TBody>
                 {txs.map((t) => {
-                  const label = txTypeLabel(t.txType, false);
+                  const label = txTypeLabel(t.txType, t.coinbase);
                   return (
                     <TR key={t.hash}>
                       <TD>

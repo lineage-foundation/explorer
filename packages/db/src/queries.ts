@@ -13,7 +13,8 @@ export interface BlockListItem {
   timestamp: Date | null; nbTx: number | null;
 }
 export interface BlockTxItem {
-  hash: string; blockHash: string; version: number; timestamp: Date | null; txType: string | undefined;
+  hash: string; blockHash: string; version: number; timestamp: Date | null;
+  txType: string | undefined; coinbase: boolean;
 }
 export interface TxListItem {
   hash: string; blockHash: string; version: number; timestamp: Date | null; txType: string | undefined;
@@ -77,10 +78,16 @@ export async function getBlockTransactions(
 ): Promise<{ transactions: BlockTxItem[] } | null> {
   const found = await getBlockByHashOrNumber(db, hashOrNumber);
   if (!found) return null;
+  // Include the coinbase (block-reward) transaction, ordered first, so a block's
+  // full transaction set is visible.
   const txs = await db
-    .select({ hash: transaction.hash, blockHash: transaction.blockHash, version: transaction.version })
+    .select({
+      hash: transaction.hash, blockHash: transaction.blockHash,
+      version: transaction.version, coinbase: transaction.coinbase,
+    })
     .from(transaction)
-    .where(and(eq(transaction.blockHash, found.hash), eq(transaction.coinbase, false)));
+    .where(eq(transaction.blockHash, found.hash))
+    .orderBy(desc(transaction.coinbase));
   const hashes = txs.map((t) => t.hash);
   const firstOuts = hashes.length
     ? await db.select({ txHash: txOut.txHash, valueType: txOut.valueType })
@@ -90,7 +97,7 @@ export async function getBlockTransactions(
   return {
     transactions: txs.map((t) => ({
       hash: t.hash, blockHash: t.blockHash, version: t.version,
-      timestamp: found.timestamp, txType: typeByHash.get(t.hash),
+      timestamp: found.timestamp, txType: typeByHash.get(t.hash), coinbase: t.coinbase,
     })),
   };
 }
