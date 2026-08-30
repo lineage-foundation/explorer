@@ -18,7 +18,7 @@
 - Errors are RFC 9457 `application/problem+json` with `{ type, title, status, detail?, instance? }`.
 - OpenAPI document is **3.1.0**.
 - All public routes live under the literal path prefix `/api/v1`.
-- **No AI attribution** anywhere — commits, code comments, docs. **No legacy-brand strings** (`aiblock`, `aibcoin`, `@2waychain`, `2wayjs`, `ablock`) — CI greps for these.
+- **No AI attribution** anywhere — commits, code comments, docs. **No legacy-brand strings** — the pre-migration chain's brand identifiers; CI greps for the exact pattern (defined in the rebrand gate in `.github/workflows/ci.yml`).
 - `z` MUST be imported from `@hono/zod-openapi` (its Zod is extended with `.openapi()`), never from `zod` directly, in any file that builds route/response schemas.
 
 ## File Structure
@@ -1681,9 +1681,9 @@ Run:
 pnpm typecheck
 pnpm lint
 env -u DATABASE_URL pnpm -F @explorer/web build
-git grep -niE "aiblock|aibcoin|@2waychain|2wayjs|ablock" -- ':!.github/workflows/ci.yml' && echo FOUND || echo CLEAN
+# Run the same rebrand grep the CI 'verify' job runs (the pattern lives in .github/workflows/ci.yml); expect no matches.
 ```
-Expected: typecheck/lint clean, web build compiles, grep prints `CLEAN`.
+Expected: typecheck/lint clean, web build compiles, rebrand grep prints `CLEAN`.
 
 - [ ] **Step 8: Commit**
 
