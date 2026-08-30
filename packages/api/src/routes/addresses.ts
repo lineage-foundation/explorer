@@ -1,7 +1,7 @@
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import type { Database } from "@explorer/db";
 import { getAccountBalance, getAccountTransactions } from "@explorer/db";
-import { formatLngx } from "@explorer/config";
+import { formatLngxPlain } from "@explorer/config";
 import { AccountTxQuery, AddressSchema, TransactionSchema, listSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
 import { serializeTransaction } from "./transactions.js";
@@ -24,7 +24,7 @@ export function registerAddresses(app: OpenAPIHono, db: Database): void {
       const { address } = c.req.valid("param");
       const { balance } = await getAccountBalance(db, address);
       c.header("Cache-Control", `public, s-maxage=${CACHE.list}`);
-      return c.json({ address, balance, balanceLngx: formatLngx(balance) });
+      return c.json({ address, balance, balanceLngx: formatLngxPlain(balance) });
     },
   );
 

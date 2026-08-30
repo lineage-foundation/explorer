@@ -17,6 +17,7 @@ describe("addresses routes", () => {
     const body = (await res.json()) as { address: string; balance: string; balanceLngx: string };
     expect(body).toMatchObject({ address: "addr_1", balance: "500" });
     expect(typeof body.balanceLngx).toBe("string");
+    expect(body.balanceLngx).not.toContain(",");
   });
 
   it("returns balance 0 for an unknown address (never 404)", async () => {

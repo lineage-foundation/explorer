@@ -17,6 +17,7 @@ describe("meta routes", () => {
     const body = (await res.json()) as { circulating: string; circulatingLngx: string; ticker: string };
     expect(body).toMatchObject({ circulating: "12345", ticker: "LNGX" });
     expect(typeof body.circulatingLngx).toBe("string");
+    expect(body.circulatingLngx).not.toContain(",");
   });
 
   it("returns chain status", async () => {

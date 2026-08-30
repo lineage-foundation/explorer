@@ -30,6 +30,7 @@ describe("transactions routes", () => {
     expect(body).toMatchObject({ hash: "tx_2", type: "unknown" });
     expect(body.inputs[0]).toMatchObject({ fromAddress: "addr_1", amount: "500" });
     expect(typeof body.inputs[0]?.amountLngx).toBe("string");
+    expect(body.inputs[0]?.amountLngx).not.toContain(",");
   });
 
   it("serializes outputs with address and amountLngx", async () => {

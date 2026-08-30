@@ -4,7 +4,7 @@ import type { Database } from "@explorer/db";
 import {
   getCirculatingSupply, getMaxBlockNum, getBlocksCount, getTransactionsCount,
 } from "@explorer/db";
-import { formatLngx, TOKEN_TICKER, NETWORK_DISPLAY_NAME } from "@explorer/config";
+import { formatLngxPlain, TOKEN_TICKER, NETWORK_DISPLAY_NAME } from "@explorer/config";
 import { SupplySchema, StatusSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
 
@@ -22,7 +22,7 @@ export function registerMeta(app: OpenAPIHono, db: Database): void {
       c.header("Cache-Control", `public, s-maxage=${CACHE.list}`);
       return c.json({
         circulating: circulatingSupply,
-        circulatingLngx: formatLngx(circulatingSupply),
+        circulatingLngx: formatLngxPlain(circulatingSupply),
         ticker: TOKEN_TICKER,
       });
     },

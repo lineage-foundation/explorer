@@ -7,22 +7,36 @@ export interface RateLimitStore {
     limit: number,
     windowSeconds: number,
   ): { ok: boolean; remaining: number; resetSeconds: number };
+  size(): number;
 }
 
-export function createMemoryStore(): RateLimitStore {
+const SWEEP_INTERVAL_MS = 60_000;
+const MAX_KEYS = 100_000;
+
+export function createMemoryStore(now: () => number = () => Date.now()): RateLimitStore {
   const buckets = new Map<string, { count: number; resetAt: number }>();
+  let lastSweep = now();
   return {
     take(key, limit, windowSeconds) {
-      const now = Date.now();
+      const t = now();
+      if (t - lastSweep >= SWEEP_INTERVAL_MS || buckets.size > MAX_KEYS) {
+        for (const [k, b] of buckets) {
+          if (b.resetAt <= t) buckets.delete(k);
+        }
+        lastSweep = t;
+      }
       const existing = buckets.get(key);
-      if (!existing || existing.resetAt <= now) {
-        buckets.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+      if (!existing || existing.resetAt <= t) {
+        buckets.set(key, { count: 1, resetAt: t + windowSeconds * 1000 });
         return { ok: true, remaining: limit - 1, resetSeconds: windowSeconds };
       }
       existing.count += 1;
-      const resetSeconds = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
+      const resetSeconds = Math.max(1, Math.ceil((existing.resetAt - t) / 1000));
       if (existing.count > limit) return { ok: false, remaining: 0, resetSeconds };
       return { ok: true, remaining: limit - existing.count, resetSeconds };
+    },
+    size() {
+      return buckets.size;
     },
   };
 }
@@ -38,6 +52,9 @@ export function rateLimit(opts: RateLimitOptions = {}): MiddlewareHandler {
   const windowSeconds = opts.windowSeconds ?? 60;
   const store = opts.store ?? createMemoryStore();
   return async (c, next) => {
+    // SOFT abuse limit only: keyed on the leftmost X-Forwarded-For hop, which is
+    // trusted only as much as the upstream proxy. Precise trusted-proxy IP
+    // derivation is deploy-specific and out of scope here.
     const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
     const key = forwarded && forwarded.length > 0 ? forwarded : "unknown";
     const result = store.take(key, limit, windowSeconds);

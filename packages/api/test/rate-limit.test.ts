@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createDb } from "@explorer/db";
 import { createApiApp } from "../src/index.js";
+import { createMemoryStore } from "../src/rate-limit.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@127.0.0.1:5432/explorer_test";
 
@@ -28,5 +29,15 @@ describe("rate limiting", () => {
     expect(res.headers.get("Retry-After")).not.toBeNull();
     const body = await res.json();
     expect(body).toMatchObject({ title: "Too Many Requests", status: 429 });
+  });
+
+  it("evicts expired buckets so the store stays bounded", () => {
+    let clock = 0;
+    const store = createMemoryStore(() => clock);
+    store.take("a", 2, 60); // bucket a, resetAt = 60_000
+    expect(store.size()).toBe(1);
+    clock = 61_000; // past a's window AND past the sweep interval
+    store.take("b", 2, 60); // triggers sweep; a is expired -> removed
+    expect(store.size()).toBe(1); // only b remains
   });
 });

@@ -1,7 +1,7 @@
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import type { Database, TxDetail } from "@explorer/db";
 import { getTransactions, getTransactionByHash } from "@explorer/db";
-import { formatLngx } from "@explorer/config";
+import { formatLngxPlain } from "@explorer/config";
 import {
   ListQuery, TransactionSummarySchema, TransactionSchema, ProblemSchema, listSchema,
 } from "../schemas.js";
@@ -18,7 +18,7 @@ export function serializeTransaction(t: TxDetail) {
     inputs: t.ins.map((i) => ({
       fromAddress: i.fromAddress,
       amount: i.amount,
-      amountLngx: i.amount !== null ? formatLngx(i.amount) : null,
+      amountLngx: i.amount !== null ? formatLngxPlain(i.amount) : null,
       previousOutTxHash: i.previousOutTxHash,
       previousOutTxN: i.previousOutTxN,
     })),
@@ -26,7 +26,7 @@ export function serializeTransaction(t: TxDetail) {
       n: o.n,
       valueType: o.valueType,
       amount: o.amount,
-      amountLngx: o.amount !== null ? formatLngx(o.amount) : null,
+      amountLngx: o.amount !== null ? formatLngxPlain(o.amount) : null,
       address: o.scriptPublicKey,
       locktime: o.locktime,
       genesisHash: o.genesisHash,
