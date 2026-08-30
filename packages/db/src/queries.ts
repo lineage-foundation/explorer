@@ -21,6 +21,7 @@ export interface TxListItem {
 }
 export interface TxDetail {
   blockHash: string; hash: string; version: number; timestamp: Date | null;
+  coinbase: boolean;
   fees: unknown; druidInfo: unknown;
   ins: {
     scriptSignature: unknown;
@@ -148,6 +149,7 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
   const txs = await db
     .select({
       hash: transaction.hash, blockHash: transaction.blockHash, version: transaction.version,
+      coinbase: transaction.coinbase,
       fees: transaction.fees, druidInfo: transaction.druidInfo, timestamp: block.timestamp,
     })
     .from(transaction)
@@ -178,7 +180,7 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
     expanded.map((e) => [`${e.txHash}:${e.previousOutTxHash}:${e.previousOutTxN}`, e]),
   );
   return txs.map((t) => ({
-    blockHash: t.blockHash, hash: t.hash, version: t.version, timestamp: t.timestamp,
+    blockHash: t.blockHash, hash: t.hash, version: t.version, coinbase: t.coinbase, timestamp: t.timestamp,
     fees: t.fees, druidInfo: t.druidInfo,
     ins: (insByHash.get(t.hash) ?? []).map((i: TxIn) => {
       const resolved = expandedByKey.get(`${t.hash}:${i.previousOutTxHash}:${i.previousOutTxN}`);

@@ -4,6 +4,7 @@ import type { Database } from "@explorer/db";
 import { ProblemError, problemJson } from "./problem.js";
 import { rateLimit, type RateLimitOptions } from "./rate-limit.js";
 import { registerBlocks } from "./routes/blocks.js";
+import { registerTransactions } from "./routes/transactions.js";
 
 export interface ApiDeps {
   db: Database;
@@ -36,6 +37,7 @@ export function createApiApp({ db, rateLimit: rl }: ApiDeps): OpenAPIHono {
   app.notFound((c) => problemJson(c, 404, "Not Found", `No route for ${new URL(c.req.url).pathname}`));
 
   registerBlocks(app, db);
+  registerTransactions(app, db);
 
   return app;
 }

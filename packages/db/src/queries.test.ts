@@ -104,6 +104,7 @@ describe("read queries", () => {
   it("returns full transaction detail or null", async () => {
     const tx = await getTransactionByHash(db(), "tx_1");
     expect(tx?.outs[0]?.amount).toBe("500");
+    expect(tx?.coinbase).toBe(false);
     expect(await getTransactionByHash(db(), "nope")).toBeNull();
   });
 
