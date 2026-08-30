@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { BlockListItem, TxListItem } from "@explorer/db";
 import { StatRow } from "./StatRow.js";
@@ -53,11 +54,17 @@ export function LatestFeed({ initial }: { initial: Snapshot }) {
       <StatRow blocksCount={snap.blocksCount} txCount={snap.txCount} circulatingSupply={snap.circulatingSupply} />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section>
-          <h2 className="mb-2 font-display text-lg text-text">Latest blocks</h2>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="font-display text-lg text-text">Latest blocks</h2>
+            <Link href="/blocks" className="text-sm text-link hover:text-link-hover">View all →</Link>
+          </div>
           <BlockTable blocks={snap.blocks} />
         </section>
         <section>
-          <h2 className="mb-2 font-display text-lg text-text">Latest transactions</h2>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="font-display text-lg text-text">Latest transactions</h2>
+            <Link href="/transactions" className="text-sm text-link hover:text-link-hover">View all →</Link>
+          </div>
           <TxTable txs={snap.txs} />
         </section>
       </div>
