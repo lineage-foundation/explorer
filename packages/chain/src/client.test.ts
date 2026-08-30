@@ -25,11 +25,11 @@ describe("LineageNodeClient", () => {
     expect(JSON.parse(init.body)).toEqual([3, 4, 5]);
   });
 
-  it("wraps a single hash in quotes for /blockchain_entry", async () => {
+  it("sends a single hash as a one-element array to /blockchain_entry", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ content: [["h", { inputs: [] }]] }));
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
     await client.getTransactionByHash("abc");
-    expect(fetchImpl.mock.calls[0]![1].body).toBe('"abc"');
+    expect(fetchImpl.mock.calls[0]![1].body).toBe('["abc"]');
   });
 
   it("batches multiple hashes and tolerates a failing batch", async () => {

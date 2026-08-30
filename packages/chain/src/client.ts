@@ -76,9 +76,11 @@ export class LineageNodeClient {
   }
 
   async getTransactionByHash(hash: string): Promise<[[string, LineageTransaction]]> {
+    // /blockchain_entry expects a JSON array of hashes and rejects a bare
+    // string with 400; send a one-element array, same as the batch path.
     const data = await this.fetchJson<{ content: [[string, LineageTransaction]] }>(
       `${this.config.storageNodeUrl}/blockchain_entry`,
-      { method: "POST", headers: JSON_HEADERS, body: `"${hash}"` },
+      { method: "POST", headers: JSON_HEADERS, body: `["${hash}"]` },
       "getTransactionByHash",
       30000,
     );
