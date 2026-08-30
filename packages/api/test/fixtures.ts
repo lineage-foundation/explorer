@@ -20,9 +20,12 @@ export async function seedFixtures(db: Database): Promise<void> {
     { hash: "tx_cb", blockHash: "b_hash_2", version: 1, coinbase: true },
     { hash: "tx_2", blockHash: "b_hash_2", version: 1, coinbase: false },
   ]);
-  await db.insert(txOut).values([
-    { txId: 1, txHash: "tx_1", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr_1", n: 0 },
-  ]);
+  const [out1] = await db
+    .insert(txOut)
+    .values([
+      { txId: 1, txHash: "tx_1", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr_1", n: 0 },
+    ])
+    .returning({ id: txOut.id });
   await db.insert(txIn).values([
     { txId: 1, txHash: "tx_1", scriptSignature: {} },
     { txId: 3, txHash: "tx_2", scriptSignature: {}, previousOutTxHash: "tx_1", previousOutTxN: 0 },
@@ -32,6 +35,6 @@ export async function seedFixtures(db: Database): Promise<void> {
   ]);
   await db.insert(circulatingSupply).values([{ id: 1, circulatingSupply: "12345" }]);
   await db.insert(coinsHistory).values([
-    { address: "addr_1", date: new Date("2024-01-03T00:00:00Z"), outIds: [1] },
+    { address: "addr_1", date: new Date("2024-01-03T00:00:00Z"), outIds: [out1?.id] },
   ]);
 }

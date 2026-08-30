@@ -5,6 +5,7 @@ import { ProblemError, problemJson } from "./problem.js";
 import { rateLimit, type RateLimitOptions } from "./rate-limit.js";
 import { registerBlocks } from "./routes/blocks.js";
 import { registerTransactions } from "./routes/transactions.js";
+import { registerAddresses } from "./routes/addresses.js";
 
 export interface ApiDeps {
   db: Database;
@@ -38,6 +39,7 @@ export function createApiApp({ db, rateLimit: rl }: ApiDeps): OpenAPIHono {
 
   registerBlocks(app, db);
   registerTransactions(app, db);
+  registerAddresses(app, db);
 
   return app;
 }
