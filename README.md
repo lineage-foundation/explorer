@@ -93,6 +93,12 @@ starting `web`/`indexer` without the `postgres` service. From the host, always
 use `localhost:5432`; run the full `docker compose up` so the `postgres` service
 is present on the network.
 
+## Public API
+
+A read-only REST API is served under `/api/v1`. Interactive docs (Scalar) are
+at `/api/v1/docs` and the OpenAPI 3.1 document at `/api/v1/openapi.json`.
+Access is anonymous with a soft per-IP rate limit.
+
 ## Scripts
 
 | Script | Purpose |

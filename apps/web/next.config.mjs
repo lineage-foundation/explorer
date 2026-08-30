@@ -1,7 +1,7 @@
 /** @type {import("next").NextConfig} */
 export default {
   output: "standalone",
-  transpilePackages: ["@explorer/config", "@explorer/db", "@explorer/ui"],
+  transpilePackages: ["@explorer/config", "@explorer/db", "@explorer/ui", "@explorer/api"],
   webpack(config) {
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,

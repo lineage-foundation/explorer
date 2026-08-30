@@ -13,10 +13,12 @@
     "e2e": "tsx e2e/seed.ts && playwright test"
   },
   "dependencies": {
+    "@explorer/api": "workspace:*",
     "@explorer/config": "workspace:*",
     "@explorer/db": "workspace:*",
     "@explorer/ui": "workspace:^",
     "bignumber.js": "^11.1.5",
+    "hono": "^4.6.0",
     "next": "^15.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
