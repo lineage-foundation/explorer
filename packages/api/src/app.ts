@@ -2,12 +2,14 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import type { Database } from "@explorer/db";
 import { ProblemError, problemJson } from "./problem.js";
+import { rateLimit, type RateLimitOptions } from "./rate-limit.js";
 
 export interface ApiDeps {
   db: Database;
+  rateLimit?: RateLimitOptions;
 }
 
-export function createApiApp({ db: _db }: ApiDeps): OpenAPIHono {
+export function createApiApp({ db: _db, rateLimit: rl }: ApiDeps): OpenAPIHono {
   const app = new OpenAPIHono({
     defaultHook: (result) => {
       if (!result.success) {
@@ -20,6 +22,7 @@ export function createApiApp({ db: _db }: ApiDeps): OpenAPIHono {
   });
 
   app.use("/api/v1/*", cors({ origin: "*", allowMethods: ["GET", "OPTIONS"] }));
+  app.use("/api/v1/*", rateLimit(rl));
 
   app.onError((err, c) => {
     if (err instanceof ProblemError) {
