@@ -14,6 +14,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
+  "dependencies": {
+    "bignumber.js": "^11.1.5"
+  },
   "devDependencies": {
     "@eslint/js": "^9.11.0",
     "@types/node": "^22.7.4",
