@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { classify } from "../../lib/search.js";
 import type { Suggestion } from "../../lib/resolve-search.js";
@@ -17,6 +17,7 @@ export function SearchBar() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState(false);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listId = "search-suggestions";
 
   useEffect(() => {
@@ -39,6 +40,8 @@ export function SearchBar() {
     }, 200);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [value]);
+
+  useEffect(() => () => { if (blurTimer.current) clearTimeout(blurTimer.current); }, []);
 
   function go(href: string): void {
     setError(false);
@@ -78,7 +81,7 @@ export function SearchBar() {
         value={value}
         onChange={(e) => { setValue(e.target.value); setError(false); }}
         onKeyDown={onKeyDown}
-        onBlur={() => { setTimeout(() => setOpen(false), 120); }}
+        onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 120); }}
         placeholder="Search block / tx / address…"
         aria-label="Search"
         aria-describedby={error ? "search-error" : undefined}
