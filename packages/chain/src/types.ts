@@ -1,8 +1,9 @@
-// Vendored from @lineage/sdk-js (github.com/lineage-foundation/sdk-js).
-// The read-only explorer only needs these as TYPES — it never calls the SDK
-// at runtime. TODO: once @lineage/sdk-js is published to npm, replace these
-// local declarations with `import type { ITransaction } from "@lineage/sdk-js"`
-// and `export type LineageTransaction = ITransaction`.
+// Vendored from @lineage/sdk-js (github.com/lineage-foundation/sdk-js), which
+// is at v2.0.0 on the fleet's `/v1` REST API. The read-only explorer only
+// needs these as TYPES — it never calls the SDK runtime. TODO: once
+// @lineage/sdk-js is published to npm, replace these local declarations with
+// `import type { ITransaction } from "@lineage/sdk-js"` and
+// `export type LineageTransaction = ITransaction`.
 export interface LineageOutPoint {
   t_hash: string;
   n: number;
@@ -58,8 +59,6 @@ export interface LineageBlock {
 export interface LineageNodeConfig {
   storageNodeUrl: string;
   mempoolNodeUrl?: string;
-  issuedSupplyUrl?: string;
-  totalSupplyUrl?: string;
   txHttpBatchSize?: number;
   txHttpConcurrency?: number;
   txHttpInterBatchDelayMs?: number;

@@ -2,8 +2,6 @@ export interface IndexerConfig {
   databaseUrl: string;
   storageNodeUrl: string;
   mempoolNodeUrl?: string;
-  issuedSupplyUrl?: string;
-  totalSupplyUrl?: string;
   genesisHeight: number;
   maxBlockRange: number;
   pollIntervalMs: number;
@@ -41,8 +39,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): IndexerConfig {
     databaseUrl: required(env, "DATABASE_URL"),
     storageNodeUrl: required(env, "LINEAGE_STORAGE_NODE_URL"),
     mempoolNodeUrl: env.LINEAGE_MEMPOOL_NODE_URL,
-    issuedSupplyUrl: env.LINEAGE_ISSUED_SUPPLY_URL,
-    totalSupplyUrl: env.LINEAGE_TOTAL_SUPPLY_URL,
     genesisHeight: num(env, "INDEXER_GENESIS_HEIGHT", 0),
     maxBlockRange: num(env, "INDEXER_MAX_BLOCK_RANGE", 1000),
     pollIntervalMs: num(env, "INDEXER_POLL_INTERVAL_MS", 2000),

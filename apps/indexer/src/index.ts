@@ -10,8 +10,6 @@ async function main(): Promise<void> {
   const source = new LineageNodeClient({
     storageNodeUrl: config.storageNodeUrl,
     mempoolNodeUrl: config.mempoolNodeUrl,
-    issuedSupplyUrl: config.issuedSupplyUrl,
-    totalSupplyUrl: config.totalSupplyUrl,
     txHttpBatchSize: config.txHttpBatchSize,
     txHttpConcurrency: config.txHttpConcurrency,
     txHttpInterBatchDelayMs: config.txHttpInterBatchDelayMs,

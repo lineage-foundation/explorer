@@ -39,16 +39,19 @@ Postgres directly. Stop the DB with `pnpm dev:stop`.
 
 ### How the fleet connection is wired
 
+The indexer talks to the fleet's **`/v1` REST API** (`/v1/blocks/*`,
+`/v1/blockchain-entries/query`, `/v1/supply`).
+
 | What | Env var | Default | Served by |
 | --- | --- | --- | --- |
 | Blocks / transactions | `LINEAGE_STORAGE_NODE_URL` | `http://localhost:3001` | fleet **storage** node |
 | Circulating / total supply | `LINEAGE_MEMPOOL_NODE_URL` | `http://localhost:3003` | fleet **mempool** node |
 | Database | `DATABASE_URL` | `postgres://explorer:explorer@localhost:5432/explorer` | local Postgres |
 
-The supply endpoints (`/issued_supply`, `/total_supply`) live on the **mempool**
-node, not the storage node — so `LINEAGE_MEMPOOL_NODE_URL` must be set for
-circulating supply to resolve. All other tunables (indexer batching, poll
-interval, log level, health port) are in `.env.example` with sane defaults.
+The supply endpoint (`/v1/supply`) lives on the **mempool** node, not the
+storage node — so `LINEAGE_MEMPOOL_NODE_URL` must be set for circulating
+supply to resolve. All other tunables (indexer batching, poll interval, log
+level, health port) are in `.env.example` with sane defaults.
 
 ### Run in Docker with hot reload (`pnpm dev:docker`)
 
