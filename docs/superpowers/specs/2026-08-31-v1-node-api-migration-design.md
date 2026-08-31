@@ -18,10 +18,11 @@ The fleet node replaced its flat action-paths (`/latest_block`, `/block_by_num`,
 returning **plain JSON**, real HTTP status codes, and `application/problem+json`
 error bodies. OpenAPI is served at `/v1/openapi.json`, Swagger at `/v1/docs`.
 
-**Operational note:** the currently-running local fleet node is still the *old*
-build (every `/v1` route returns the legacy "Method not found" envelope; the old
-paths still answer). This migration is built against the fleet source spec;
-end-to-end integration testing is gated on the user deploying the `/v1` fleet.
+**Operational note:** the local fleet node has been rebuilt to the `/v1` build,
+and all response shapes in this spec are **verified against it live**
+(`GET /v1/blocks/latest`, `GET /v1/blocks?num=…`, `POST /v1/blockchain-entries/query`,
+`GET /v1/supply`, and the `application/problem+json` 404s). The unit suite mocks
+HTTP; a manual smoke against the running node is a final step.
 
 ## Approach
 
@@ -36,19 +37,35 @@ old API is gone).
 Base URLs are unchanged (`storageNodeUrl` = storage node, `mempoolNodeUrl` =
 mempool node); only paths gain `/v1`.
 
-| Method (unchanged signature) | New request | Response → current return shape |
-|---|---|---|
-| `getLatestBlock(): LineageBlock` | `GET {storage}/v1/blocks/latest` | `{ block }` → `block`. `404` = empty chain (throws, cycle retries). |
-| `getBlockRange(start, end): [string, Record<"block", LineageBlock>][]` | `GET {storage}/v1/blocks?num=…` (repeat `num` per height; chunked, see below) | `[{ key, item_meta, data }]` → `[[key, { block: data }]]` |
-| `getTransactionsByHash(hashes): [string, LineageTransaction][]` | `POST {storage}/v1/blockchain-entries/query` body `{ keys: [...] }` | `[{ key, item_meta, data }]` → `[[key, data]]` |
-| `getIssuedSupply(): string` / `getCirculatingSupply()` | `GET {mempool}/v1/supply` | `{ total, issued }` → `BigNumber(issued).toFixed(0)` |
-| `getTotalSupply(): string` | `GET {mempool}/v1/supply` | `{ total, issued }` → `BigNumber(total).toFixed(0)` |
+All response shapes below are **verified against the live `/v1` fleet node**.
+Note the block wrapping: a stored block's JSON is `{ block: { header, transactions } }`,
+and `LatestBlockResponse` wraps that again under `block`, so the two block reads
+unwrap to different depths.
 
-**`entry.key` for a block IS the block hash** — confirmed from the fleet source:
-`get_block_by_num`/`get_blocks_batch` look up the named `indexed_block_hash_key(num)`
-pointer, which `get_stored_value_from_db` resolves to the block's actual storage
-key (its hash) before building the entry. So `[[key, {block: data}]]` gives the
-same `[hash, {block}]` shape the indexer already consumes.
+| Method (unchanged signature) | New request | Verified response → current return shape |
+|---|---|---|
+| `getLatestBlock(): LineageBlock` | `GET {storage}/v1/blocks/latest` | `{ block: { block: <blk> } }` → **`data.block.block`**. `404` = empty chain (throws, cycle retries). |
+| `getBlockRange(start, end): [string, Record<"block", LineageBlock>][]` | `GET {storage}/v1/blocks?num=…` (repeat `num` per height; chunked, see below) | `[{ key, item_meta, data: { block: <blk> } }]` → **`[[key, { block: data.block }]]`** |
+| `getTransactionsByHash(hashes): [string, LineageTransaction][]` | `POST {storage}/v1/blockchain-entries/query` body `{ keys: [...] }` | `[{ key, item_meta, data: <tx> }]` → `[[key, data]]` (`data` is the tx: `{inputs, outputs, version, druid_info, fees}`) |
+| `getIssuedSupply(): string` / `getCirculatingSupply()` | `GET {mempool}/v1/supply` | `{ total, issued }` → `issued` digit-string parsed **from raw text** (see Big integers) |
+| `getTotalSupply(): string` | `GET {mempool}/v1/supply` | `{ total, issued }` → `total` digit-string parsed **from raw text** |
+
+**`entry.key` for a block IS the block hash** — verified live (block 0's entry
+`key` is its 65-char `b0000c12…` hash) and confirmed in the fleet source
+(`get_block_by_num`/`get_blocks_batch` resolve the named `indexed_block_hash_key(num)`
+pointer to the block's actual storage key). So `[[key, { block: data.block }]]`
+gives the same `[hash, {block}]` shape the indexer already consumes.
+
+## Big integers (supply)
+
+`GET /v1/supply` returns `total` and `issued` as JSON integers that **exceed
+`Number.MAX_SAFE_INTEGER` (2^53)** — e.g. `total: 360360000000000000`,
+`issued: 90091258856512411`. `JSON.parse` (`res.json()`) would silently lose
+precision, so `fetchSupply` must read the response as **raw text** and extract
+the digit runs with a regex (`/"issued"\s*:\s*(\d+)/`, `/"total"\s*:\s*(\d+)/`),
+then pass the digit-string to `BigNumber` — exactly the raw-text approach the
+current `fetchSupply` already uses. Block and transaction reads have no >2^53
+numeric fields, so they use `res.json()` normally.
 
 **`item_meta`** is `{ type: "block", block_num, tx_len }` or
 `{ type: "tx", block_num, tx_num }`; the client ignores it (kept for possible
@@ -128,10 +145,12 @@ README.md                              modify — document the /v1 node API + LI
 - **`packages/chain/src/client.test.ts`** (rewrite): mock `fetchImpl` and assert,
   for each method, the exact `/v1` URL, the request encoding (`{ keys: [...] }`
   body for entries; repeated `?num=` for blocks; GET for latest/supply), the
-  entry→tuple mapping (`{key, item_meta, data}` → `[key, block/tx]`), supply
-  parsing (`{ total, issued }` → the right field as a string), that a chunked
-  block range issues multiple GETs and concatenates, that omitted keys yield a
-  shorter result, and that `apiKey` sets the `x-api-key` header.
+  entry→tuple mapping — including the block unwrap depth (`data.block.block` for
+  latest, `data.block` for range entries) and tx `data` used directly — supply
+  parsing that preserves a **>2^53 digit-string** from raw text (a test whose
+  `issued`/`total` exceed `Number.MAX_SAFE_INTEGER` and assert the exact digits),
+  that a chunked block range issues multiple GETs and concatenates, that omitted
+  keys yield a shorter result, and that `apiKey` sets the `x-api-key` header.
 - **Indexer tests** use `FakeSourceClient` (the `SourceClient` interface), which
   is unchanged, so they need no edits beyond the `config.test.ts` field removal.
 - **Integration** against a live `/v1` fleet is gated on the user deploying it;
