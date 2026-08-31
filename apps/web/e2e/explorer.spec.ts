@@ -18,6 +18,18 @@ test("block detail resolves by number and by hash", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "#0" })).toBeVisible();
 });
 
+test("block detail shows reward, miner, and prev/next navigation", async ({ page }) => {
+  // Genesis: reward + miner present, a next link to block 1, and no prev link.
+  await page.goto("/block/0");
+  await expect(page.getByText("Reward")).toBeVisible();
+  await expect(page.getByText("Miner")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Block #1/ })).toHaveAttribute("href", "/block/1");
+  await expect(page.getByRole("link", { name: /← Block/ })).toHaveCount(0);
+  // Latest indexed block (1): a prev link to block 0.
+  await page.goto("/block/1");
+  await expect(page.getByRole("link", { name: /← Block #0/ })).toHaveAttribute("href", "/block/0");
+});
+
 test("transaction detail shows resolved input address and outputs", async ({ page }) => {
   await page.goto("/transaction/t1");
   await expect(page.getByRole("heading", { name: "Outputs" })).toBeVisible();

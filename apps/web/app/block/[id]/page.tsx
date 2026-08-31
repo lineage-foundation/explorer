@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getBlockByHashOrNumber, getBlockTransactions } from "@explorer/db";
+import { getBlockByHashOrNumber, getBlockTransactions, getBlockCoinbaseInfo, getMaxBlockNum } from "@explorer/db";
 import {
   Card, Table, THead, TBody, TR, TH, TD, Mono, Pill, CopyButton, EmptyState,
 } from "@explorer/ui";
 import { getDb } from "../../../lib/db.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import {
-  absoluteTime, relativeTime, truncateHash, txTypeLabel,
+  absoluteTime, relativeTime, truncateHash, txTypeLabel, formatLngx,
 } from "../../../lib/format.js";
 
 export const revalidate = 3600;
@@ -27,11 +27,38 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
   const { db } = getDb();
   const block = await getBlockByHashOrNumber(db, id);
   if (!block) notFound();
-  const txs = (await getBlockTransactions(db, id))?.transactions ?? [];
+  const [txsRes, coinbase, maxNum] = await Promise.all([
+    getBlockTransactions(db, id),
+    getBlockCoinbaseInfo(db, block.hash),
+    getMaxBlockNum(db),
+  ]);
+  const txs = txsRes?.transactions ?? [];
 
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Block" title={`#${block.num.toLocaleString()}`} />
+      <div className="flex items-center justify-between text-sm">
+        {block.num > 0
+          ? (
+            <Link
+              href={`/block/${block.num - 1}`}
+              className="rounded-md border border-border px-3 py-1.5 text-text-muted hover:text-text"
+            >
+              {`← Block #${(block.num - 1).toLocaleString()}`}
+            </Link>
+          )
+          : <span />}
+        {maxNum !== null && block.num < maxNum
+          ? (
+            <Link
+              href={`/block/${block.num + 1}`}
+              className="rounded-md border border-border px-3 py-1.5 text-text-muted hover:text-text"
+            >
+              {`Block #${(block.num + 1).toLocaleString()} →`}
+            </Link>
+          )
+          : <span />}
+      </div>
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Hash">{block.hash} <CopyButton value={block.hash} /></Field>
@@ -51,6 +78,16 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
           <Field label="Version">{block.version}</Field>
           <Field label="Bits">{block.bits !== null ? block.bits.toString() : "—"}</Field>
           <Field label="Transactions">{block.nbTx ?? 0}</Field>
+          <Field label="Reward">{coinbase.reward === null ? "—" : `${formatLngx(coinbase.reward, 2)} LNGX`}</Field>
+          <Field label="Miner">
+            {coinbase.miner
+              ? (
+                <Link href={`/address/${coinbase.miner}`} className="text-link hover:text-link-hover">
+                  {truncateHash(coinbase.miner, 10, 8)}
+                </Link>
+              )
+              : "—"}
+          </Field>
         </div>
       </Card>
 
