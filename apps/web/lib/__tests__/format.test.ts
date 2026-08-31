@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truncateHash, formatLngx, txTypeLabel, relativeTime, absoluteTime } from "../format.js";
+import { truncateHash, formatLngx, txTypeLabel, relativeTime, absoluteTime, confirmations } from "../format.js";
 
 describe("format", () => {
   it("truncates a hash keeping lead and tail", () => {
@@ -30,5 +30,12 @@ describe("format", () => {
   it("treats the genesis epoch-0 timestamp as unset", () => {
     expect(relativeTime(new Date(0))).toBe("—");
     expect(absoluteTime(new Date(0))).toBe("—");
+  });
+  it("computes confirmations as tip - height + 1 (inclusion = 1)", () => {
+    expect(confirmations(10, 10)).toBe(1); // latest block
+    expect(confirmations(10, 5)).toBe(6);
+    expect(confirmations(10, 0)).toBe(11); // genesis, tip 10
+    expect(confirmations(null, 3)).toBe(0); // no tip
+    expect(confirmations(5, 10)).toBe(0); // impossible height > tip, clamped
   });
 });

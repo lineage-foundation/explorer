@@ -36,3 +36,8 @@ export function txTypeLabel(
   if (valueType === "item") return "item";
   return "unknown";
 }
+
+export function confirmations(tipNum: number | null, blockNum: number): number {
+  if (tipNum === null) return 0;
+  return Math.max(0, tipNum - blockNum + 1);
+}
