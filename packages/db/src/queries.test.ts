@@ -7,7 +7,7 @@ import {
   getBlocks, getBlocksCount, getBlockByHashOrNumber, getBlockTransactions,
   getTransactions, getTransactionsCount, getTransactionByHash,
   getAccountBalance, getAccountTransactions, getCirculatingSupply,
-  getMaxBlockNum, getBlockHashByNum, getLatestCoinsHistoryOutIds,
+  getMaxBlockNum, getBlockHashByNum, getLatestCoinsHistoryOutIds, searchByPrefix,
 } from "./queries.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
@@ -164,6 +164,16 @@ describe("read queries", () => {
     const res = await getAccountTransactions(db(), "addr_1", { limit: 1, offset: 0 });
     expect(res.transactions).toHaveLength(1);
     expect(res.pagination.hasMore).toBe(false);
+  });
+
+  it("prefix-searches blocks, transactions, and addresses (escaping LIKE metachars)", async () => {
+    // "b_hash" contains an underscore (a LIKE wildcard) — must be escaped to match literally.
+    const byBlock = await searchByPrefix(db(), "b_hash", 10);
+    expect(byBlock.blocks.map((b) => b.hash).sort()).toEqual(["b_hash_1", "b_hash_2"]);
+    const byTx = await searchByPrefix(db(), "tx_", 10);
+    expect(byTx.transactions.map((t) => t.hash).sort()).toEqual(["tx_1", "tx_2", "tx_cb"]);
+    const byAddr = await searchByPrefix(db(), "addr", 10);
+    expect(byAddr.addresses.map((a) => a.address)).toContain("addr_1");
   });
 
   it("returns the max block num and a block hash by num", async () => {

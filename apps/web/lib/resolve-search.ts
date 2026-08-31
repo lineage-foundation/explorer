@@ -1,9 +1,6 @@
 import type { Database } from "@explorer/db";
-import {
-  getBlockHashByNum, getBlockByHashOrNumber, getTransactionByHash, getAccountBalance,
-} from "@explorer/db";
-import { classify } from "./search.js";
-import { truncateHash, formatLngx } from "./format.js";
+import { getBlockHashByNum, searchByPrefix } from "@explorer/db";
+import { truncateHash } from "./format.js";
 
 export interface Suggestion {
   kind: "block" | "tx" | "address";
@@ -13,43 +10,47 @@ export interface Suggestion {
   found: boolean;
 }
 
+// Minimum characters before a prefix search runs (a shorter prefix matches too
+// much to be useful), and the maximum number of suggestions returned.
+const MIN_PREFIX = 4;
+const LIMIT = 8;
+
 export async function resolveSearch(db: Database, query: string): Promise<Suggestion[]> {
   const q = query.trim();
-  const { kind } = classify(q);
+  if (q === "") return [];
 
-  if (kind === "block-num") {
-    const n = Number.parseInt(q, 10);
-    const hash = await getBlockHashByNum(db, n);
+  // Pure-numeric input is a block number (exact).
+  if (/^[0-9]+$/.test(q)) {
+    const hash = await getBlockHashByNum(db, Number.parseInt(q, 10));
     const found = hash !== null;
     return [{
-      kind: "block", label: `Block #${n.toLocaleString()}`, href: `/block/${q}`, found,
+      kind: "block", label: `Block #${Number.parseInt(q, 10).toLocaleString()}`, href: `/block/${q}`, found,
       ...(found ? {} : { sublabel: "not found" }),
     }];
   }
-  if (kind === "block-hash") {
-    const block = await getBlockByHashOrNumber(db, q);
-    const found = block !== null;
-    return [{
-      kind: "block",
-      label: found ? `Block #${block.num.toLocaleString()}` : `Block ${truncateHash(q)}`,
-      href: `/block/${q}`, found,
-      ...(found ? {} : { sublabel: "not found" }),
-    }];
+
+  if (q.length < MIN_PREFIX) return [];
+
+  const { blocks, transactions, addresses } = await searchByPrefix(db, q, LIMIT);
+  const suggestions: Suggestion[] = [
+    ...blocks.map((b) => ({
+      kind: "block" as const, label: `Block #${b.num.toLocaleString()}`,
+      sublabel: truncateHash(b.hash), href: `/block/${b.hash}`, found: true,
+    })),
+    ...transactions.map((t) => ({
+      kind: "tx" as const, label: `Transaction ${truncateHash(t.hash)}`, href: `/transaction/${t.hash}`, found: true,
+    })),
+    ...addresses.map((a) => ({
+      kind: "address" as const, label: `Address ${truncateHash(a.address)}`, href: `/address/${a.address}`, found: true,
+    })),
+  ];
+
+  // Any complete 64-hex string is a viewable address even with no output yet.
+  if (/^[a-f0-9]{64}$/i.test(q) && !suggestions.some((s) => s.kind === "address" && s.href === `/address/${q}`)) {
+    suggestions.push({
+      kind: "address", label: `Address ${truncateHash(q)}`, href: `/address/${q}`, found: true,
+    });
   }
-  if (kind === "tx") {
-    const tx = await getTransactionByHash(db, q);
-    const found = tx !== null;
-    return [{
-      kind: "tx", label: `Transaction ${truncateHash(q)}`, href: `/transaction/${q}`, found,
-      ...(found ? {} : { sublabel: "not found" }),
-    }];
-  }
-  if (kind === "address") {
-    const { balance } = await getAccountBalance(db, q);
-    return [{
-      kind: "address", label: `Address ${truncateHash(q)}`,
-      sublabel: `${formatLngx(balance, 2)} LNGX`, href: `/address/${q}`, found: true,
-    }];
-  }
-  return [];
+
+  return suggestions.slice(0, LIMIT);
 }

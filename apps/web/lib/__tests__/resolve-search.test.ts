@@ -2,64 +2,61 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@explorer/db", () => ({
   getBlockHashByNum: vi.fn(),
-  getBlockByHashOrNumber: vi.fn(),
-  getTransactionByHash: vi.fn(),
-  getAccountBalance: vi.fn(),
+  searchByPrefix: vi.fn(),
 }));
 
-import {
-  getBlockHashByNum, getBlockByHashOrNumber, getTransactionByHash, getAccountBalance,
-} from "@explorer/db";
+import { getBlockHashByNum, searchByPrefix } from "@explorer/db";
 import { resolveSearch } from "../resolve-search.js";
 
 const db = {} as never;
 beforeEach(() => vi.clearAllMocks());
 
 describe("resolveSearch", () => {
-  it("resolves an existing block number", async () => {
+  it("resolves a numeric query to a block number", async () => {
     vi.mocked(getBlockHashByNum).mockResolvedValue("H5");
     const [s] = await resolveSearch(db, "5");
     expect(s).toMatchObject({ kind: "block", label: "Block #5", href: "/block/5", found: true });
-    expect(s?.sublabel).toBeUndefined();
+    expect(searchByPrefix).not.toHaveBeenCalled();
   });
 
   it("marks a missing block number as not found", async () => {
     vi.mocked(getBlockHashByNum).mockResolvedValue(null);
     const [s] = await resolveSearch(db, "999");
-    expect(s).toMatchObject({ kind: "block", href: "/block/999", found: false, sublabel: "not found" });
+    expect(s).toMatchObject({ found: false, sublabel: "not found" });
   });
 
-  it("labels a block hash with its resolved number", async () => {
-    vi.mocked(getBlockByHashOrNumber).mockResolvedValue({ num: 42 } as never);
-    const hash = `b${"a".repeat(64)}`;
-    const [s] = await resolveSearch(db, hash);
-    expect(s).toMatchObject({ kind: "block", label: "Block #42", href: `/block/${hash}`, found: true });
+  it("prefix-matches blocks, transactions, and addresses", async () => {
+    vi.mocked(searchByPrefix).mockResolvedValue({
+      blocks: [{ num: 10, hash: "b00cabc" }],
+      transactions: [{ hash: "g1cdabc" }],
+      addresses: [{ address: "e9ebabc" }],
+    });
+    const res = await resolveSearch(db, "abcd");
+    expect(res.map((s) => s.kind)).toEqual(["block", "tx", "address"]);
+    expect(res[0]).toMatchObject({ href: "/block/b00cabc", found: true });
+    expect(res[1]).toMatchObject({ href: "/transaction/g1cdabc", found: true });
+    expect(res[2]).toMatchObject({ href: "/address/e9ebabc", found: true });
   });
 
-  it("marks a missing block hash as not found with a truncated label", async () => {
-    vi.mocked(getBlockByHashOrNumber).mockResolvedValue(null);
-    const hash = `b${"c".repeat(64)}`;
-    const [s] = await resolveSearch(db, hash);
-    expect(s).toMatchObject({ kind: "block", href: `/block/${hash}`, found: false, sublabel: "not found" });
-    expect(s?.label).toContain("Block ");
+  it("does not query for a too-short prefix", async () => {
+    expect(await resolveSearch(db, "b0")).toEqual([]);
+    expect(searchByPrefix).not.toHaveBeenCalled();
   });
 
-  it("resolves a transaction hash and its existence", async () => {
-    vi.mocked(getTransactionByHash).mockResolvedValue({ hash: "g" } as never);
-    const hash = `g${"a".repeat(31)}`;
-    const [s] = await resolveSearch(db, hash);
-    expect(s).toMatchObject({ kind: "tx", href: `/transaction/${hash}`, found: true });
+  it("caps results at the limit", async () => {
+    vi.mocked(searchByPrefix).mockResolvedValue({
+      blocks: Array.from({ length: 10 }, (_, i) => ({ num: i, hash: `b${i}` })),
+      transactions: [],
+      addresses: [],
+    });
+    const res = await resolveSearch(db, "b000");
+    expect(res.length).toBe(8);
   });
 
-  it("resolves an address with its balance and is always navigable", async () => {
-    vi.mocked(getAccountBalance).mockResolvedValue({ balance: (500n * 72072000n).toString() });
+  it("offers any complete 64-hex address as a fallback with no prefix match", async () => {
+    vi.mocked(searchByPrefix).mockResolvedValue({ blocks: [], transactions: [], addresses: [] });
     const addr = "a".repeat(64);
     const [s] = await resolveSearch(db, addr);
     expect(s).toMatchObject({ kind: "address", href: `/address/${addr}`, found: true });
-    expect(s?.sublabel).toBe("500.00 LNGX");
-  });
-
-  it("returns nothing for unrecognized input", async () => {
-    expect(await resolveSearch(db, "???")).toEqual([]);
   });
 });

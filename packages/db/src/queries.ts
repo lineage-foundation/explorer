@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, like, sql } from "drizzle-orm";
 import BigNumber from "bignumber.js";
 import type { Database } from "./client.js";
 import {
@@ -303,6 +303,44 @@ export async function getCirculatingSupply(db: Database): Promise<{ circulatingS
 export async function getMaxBlockNum(db: Database): Promise<number | null> {
   const [row] = await db.select({ max: sql<number | null>`max(${block.num})` }).from(block);
   return row?.max ?? null;
+}
+
+export interface PrefixMatches {
+  blocks: { num: number; hash: string }[];
+  transactions: { hash: string }[];
+  addresses: { address: string }[];
+}
+
+// Escape LIKE metacharacters so a user-typed prefix matches literally.
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Prefix search across block hashes, transaction hashes, and output addresses.
+ * The prefix is lower-cased (stored identifiers are lower-case hex) and matched
+ * with `LIKE 'prefix%'`. Note: on a non-C collation these scans are not
+ * index-assisted — add `varchar_pattern_ops` indexes on block.hash,
+ * transaction.hash and tx_out."scriptPublicKey" before a large production chain.
+ */
+export async function searchByPrefix(db: Database, prefix: string, limit: number): Promise<PrefixMatches> {
+  const pattern = `${escapeLike(prefix.toLowerCase())}%`;
+  const [blocks, transactions, addressRows] = await Promise.all([
+    db.select({ num: block.num, hash: block.hash }).from(block)
+      .where(like(block.hash, pattern)).orderBy(desc(block.num)).limit(limit),
+    db.select({ hash: transaction.hash }).from(transaction)
+      .where(like(transaction.hash, pattern)).limit(limit),
+    db.selectDistinct({ address: txOut.scriptPublicKey }).from(txOut)
+      .where(and(isNotNull(txOut.scriptPublicKey), like(txOut.scriptPublicKey, pattern))).limit(limit),
+  ]);
+  return {
+    blocks,
+    transactions,
+    addresses: addressRows
+      .map((r) => r.address)
+      .filter((a): a is string => a !== null)
+      .map((address) => ({ address })),
+  };
 }
 
 export async function getBlockHashByNum(db: Database, num: number): Promise<string | null> {
