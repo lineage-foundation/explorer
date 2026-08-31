@@ -103,17 +103,15 @@ today's behaviour when the tip is unavailable.
 
 - **Remove** `issuedSupplyUrl` / `totalSupplyUrl` (obsolete — one `/v1/supply`
   endpoint replaces both).
-- **Add** optional `apiKey?: string`, sent as an `x-api-key` header on every
-  request (default absent; the local fleet needs none). `fetchJson` merges it
-  into the request headers.
 - Keep `storageNodeUrl`, `mempoolNodeUrl`, and the tx-batch tuning fields.
 
+No API-key support for now (the deployment does not use one).
+
 Env plumbing: `apps/indexer/src/config.ts` stops reading
-`LINEAGE_ISSUED_SUPPLY_URL` / `LINEAGE_TOTAL_SUPPLY_URL` and reads
-`LINEAGE_API_KEY` (optional); `apps/indexer/src/index.ts` passes `apiKey`
-instead of the two supply URLs. `.env.example`, `turbo.json` `passThroughEnv`,
-`docker-compose*.yml`, and the README are updated to drop the two supply vars and
-document the optional `LINEAGE_API_KEY`.
+`LINEAGE_ISSUED_SUPPLY_URL` / `LINEAGE_TOTAL_SUPPLY_URL`, and
+`apps/indexer/src/index.ts` stops passing the two supply URLs. `.env.example`,
+`turbo.json` `passThroughEnv`, `docker-compose*.yml`, and the README are updated
+to drop the two supply vars.
 
 ## Types
 
@@ -128,9 +126,9 @@ types, never the SDK runtime.
 ## Files
 
 ```
-packages/chain/src/client.ts           modify — /v1 endpoints, mapping, chunking, apiKey header
-packages/chain/src/types.ts            modify — LineageNodeConfig (drop supply URLs, add apiKey); refresh comment
-packages/chain/src/client.test.ts      modify — assert /v1 URLs, {keys}/?num= requests, entry→tuple + supply parsing, apiKey header
+packages/chain/src/client.ts           modify — /v1 endpoints, mapping, block-range chunking
+packages/chain/src/types.ts            modify — LineageNodeConfig (drop supply URLs); refresh comment
+packages/chain/src/client.test.ts      modify — assert /v1 URLs, {keys}/?num= requests, entry→tuple + supply parsing
 apps/indexer/src/config.ts             modify — IndexerConfig + loadConfig (drop supply URLs, add apiKey)
 apps/indexer/src/index.ts              modify — construct client with apiKey, not supply URLs
 apps/indexer/src/__tests__/config.test.ts  modify (if it asserts the removed fields)
@@ -149,8 +147,8 @@ README.md                              modify — document the /v1 node API + LI
   latest, `data.block` for range entries) and tx `data` used directly — supply
   parsing that preserves a **>2^53 digit-string** from raw text (a test whose
   `issued`/`total` exceed `Number.MAX_SAFE_INTEGER` and assert the exact digits),
-  that a chunked block range issues multiple GETs and concatenates, that omitted
-  keys yield a shorter result, and that `apiKey` sets the `x-api-key` header.
+  that a chunked block range issues multiple GETs and concatenates, and that
+  omitted keys yield a shorter result.
 - **Indexer tests** use `FakeSourceClient` (the `SourceClient` interface), which
   is unchanged, so they need no edits beyond the `config.test.ts` field removal.
 - **Integration** against a live `/v1` fleet is gated on the user deploying it;
