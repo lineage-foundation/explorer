@@ -9,14 +9,15 @@ export function BlockTable({ blocks }: { blocks: BlockListItem[] }) {
   return (
     <Table fixed>
       <colgroup>
-        <col style={{ width: "14%" }} />
-        <col style={{ width: "32%" }} />
-        <col style={{ width: "11%" }} />
-        <col style={{ width: "24%" }} />
-        <col style={{ width: "19%" }} />
+        <col style={{ width: "12%" }} />
+        <col style={{ width: "22%" }} />
+        <col style={{ width: "22%" }} />
+        <col style={{ width: "10%" }} />
+        <col style={{ width: "22%" }} />
+        <col style={{ width: "12%" }} />
       </colgroup>
       <THead>
-        <TR><TH>Block</TH><TH>Hash</TH><TH>Txns</TH><TH>Reward</TH><TH>Age</TH></TR>
+        <TR><TH>Block</TH><TH>Hash</TH><TH>Miner</TH><TH>Txns</TH><TH>Reward</TH><TH>Age</TH></TR>
       </THead>
       <TBody>
         {blocks.map((b) => (
@@ -30,6 +31,15 @@ export function BlockTable({ blocks }: { blocks: BlockListItem[] }) {
               <Link href={`/block/${b.hash}`} className="text-link hover:text-link-hover">
                 <Mono>{truncateHash(b.hash)}</Mono>
               </Link>
+            </TD>
+            <TD className="truncate">
+              {b.miner
+                ? (
+                  <Link href={`/address/${b.miner}`} className="text-link hover:text-link-hover">
+                    <Mono>{truncateHash(b.miner)}</Mono>
+                  </Link>
+                )
+                : <span className="text-text-subtle">—</span>}
             </TD>
             <TD><Mono>{b.nbTx ?? 0}</Mono></TD>
             <TD><Mono>{b.reward === null ? "—" : formatLngx(b.reward, 2)}</Mono></TD>
