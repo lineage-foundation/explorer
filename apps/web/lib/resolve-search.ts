@@ -22,7 +22,7 @@ export async function resolveSearch(db: Database, query: string): Promise<Sugges
     const hash = await getBlockHashByNum(db, n);
     const found = hash !== null;
     return [{
-      kind: "block", label: `Block #${n.toLocaleString()}`, href: `/block/${n}`, found,
+      kind: "block", label: `Block #${n.toLocaleString()}`, href: `/block/${q}`, found,
       ...(found ? {} : { sublabel: "not found" }),
     }];
   }

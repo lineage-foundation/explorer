@@ -36,6 +36,14 @@ describe("resolveSearch", () => {
     expect(s).toMatchObject({ kind: "block", label: "Block #42", href: `/block/${hash}`, found: true });
   });
 
+  it("marks a missing block hash as not found with a truncated label", async () => {
+    vi.mocked(getBlockByHashOrNumber).mockResolvedValue(null);
+    const hash = `b${"c".repeat(64)}`;
+    const [s] = await resolveSearch(db, hash);
+    expect(s).toMatchObject({ kind: "block", href: `/block/${hash}`, found: false, sublabel: "not found" });
+    expect(s?.label).toContain("Block ");
+  });
+
   it("resolves a transaction hash and its existence", async () => {
     vi.mocked(getTransactionByHash).mockResolvedValue({ hash: "g" } as never);
     const hash = `g${"a".repeat(31)}`;
