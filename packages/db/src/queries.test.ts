@@ -8,6 +8,7 @@ import {
   getTransactions, getTransactionsCount, getTransactionByHash,
   getAccountBalance, getAccountTransactions, getCirculatingSupply,
   getMaxBlockNum, getBlockHashByNum, getLatestCoinsHistoryOutIds, searchByPrefix,
+  getBlockCoinbaseInfo,
 } from "./queries.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
@@ -63,10 +64,19 @@ describe("read queries", () => {
     expect(res.pagination.hasMore).toBe(false);
   });
 
-  it("includes each block's coinbase reward (sum of mining-tx outputs)", async () => {
+  it("includes each block's coinbase reward and miner", async () => {
     const res = await getBlocks(db(), { limit: 10, offset: 0, order: "desc" });
-    expect(res.blocks[0]?.reward).toBe("1000"); // block 2 has coinbase tx_cb (1000)
-    expect(res.blocks[1]?.reward).toBeNull(); // block 1 has no coinbase output
+    const b2 = res.blocks.find((b) => b.num === 2);
+    const b1 = res.blocks.find((b) => b.num === 1);
+    expect(b2?.reward).toBe("1000"); // block 2 coinbase tx_cb (1000)
+    expect(b2?.miner).toBe("miner"); // tx_cb output scriptPublicKey
+    expect(b1?.reward).toBeNull(); // block 1 has no coinbase output
+    expect(b1?.miner).toBeNull();
+  });
+
+  it("returns a block's coinbase reward and miner, or nulls", async () => {
+    expect(await getBlockCoinbaseInfo(db(), "b_hash_2")).toEqual({ reward: "1000", miner: "miner" });
+    expect(await getBlockCoinbaseInfo(db(), "b_hash_1")).toEqual({ reward: null, miner: null });
   });
 
   it("reports hasMore when more blocks remain beyond the page", async () => {

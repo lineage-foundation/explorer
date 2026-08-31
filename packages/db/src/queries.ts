@@ -10,7 +10,7 @@ export type Order = "asc" | "desc";
 export interface Pagination { total: number; limit: number; offset: number; hasMore?: boolean }
 export interface BlockListItem {
   version: number; num: number; hash: string; previousHash: string | null;
-  timestamp: Date | null; nbTx: number | null; reward: string | null;
+  timestamp: Date | null; nbTx: number | null; reward: string | null; miner: string | null;
 }
 export interface BlockTxItem {
   hash: string; blockHash: string; version: number; timestamp: Date | null;
@@ -74,10 +74,47 @@ export async function getBlocks(
         .groupBy(transaction.blockHash)
     : [];
   const rewardByHash = new Map(rewards.map((r) => [r.blockHash, r.reward]));
+  // Miner = the address on the coinbase transaction's first output.
+  const miners = blockHashes.length
+    ? await db
+        .select({ blockHash: transaction.blockHash, address: txOut.scriptPublicKey })
+        .from(transaction)
+        .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
+        .where(and(
+          inArray(transaction.blockHash, blockHashes),
+          eq(transaction.coinbase, true),
+          eq(txOut.n, 0),
+        ))
+    : [];
+  const minerByHash = new Map(miners.map((m) => [m.blockHash, m.address]));
   return {
-    blocks: rows.map((r) => ({ ...r, reward: rewardByHash.get(r.hash) ?? null })),
+    blocks: rows.map((r) => ({
+      ...r, reward: rewardByHash.get(r.hash) ?? null, miner: minerByHash.get(r.hash) ?? null,
+    })),
     pagination: { total, limit, offset, hasMore: offset + limit < total },
   };
+}
+
+export async function getBlockCoinbaseInfo(
+  db: Database,
+  blockHash: string,
+): Promise<{ reward: string | null; miner: string | null }> {
+  const [rewardRow] = await db
+    .select({ reward: sql<string | null>`sum(${txOut.amount})` })
+    .from(transaction)
+    .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
+    .where(and(eq(transaction.blockHash, blockHash), eq(transaction.coinbase, true)));
+  const [minerRow] = await db
+    .select({ address: txOut.scriptPublicKey })
+    .from(transaction)
+    .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
+    .where(and(
+      eq(transaction.blockHash, blockHash),
+      eq(transaction.coinbase, true),
+      eq(txOut.n, 0),
+    ))
+    .limit(1);
+  return { reward: rewardRow?.reward ?? null, miner: minerRow?.address ?? null };
 }
 
 export async function getBlockByHashOrNumber(db: Database, hashOrNumber: string): Promise<Block | null> {
