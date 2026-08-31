@@ -10,7 +10,7 @@ export type Order = "asc" | "desc";
 export interface Pagination { total: number; limit: number; offset: number; hasMore?: boolean }
 export interface BlockListItem {
   version: number; num: number; hash: string; previousHash: string | null;
-  timestamp: Date | null; nbTx: number | null;
+  timestamp: Date | null; nbTx: number | null; reward: string | null;
 }
 export interface BlockTxItem {
   hash: string; blockHash: string; version: number; timestamp: Date | null;
@@ -18,7 +18,7 @@ export interface BlockTxItem {
 }
 export interface TxListItem {
   hash: string; blockHash: string; blockNum: number; version: number;
-  timestamp: Date | null; txType: string | undefined;
+  timestamp: Date | null; txType: string | undefined; value: string | null;
 }
 export interface TxDetail {
   blockHash: string; hash: string; version: number; timestamp: Date | null;
@@ -63,7 +63,21 @@ export async function getBlocks(
     .orderBy(direction(block.num))
     .limit(limit)
     .offset(offset);
-  return { blocks: rows, pagination: { total, limit, offset, hasMore: offset + limit < total } };
+  // Block reward = the sum of the block's coinbase (mining) transaction outputs.
+  const blockHashes = rows.map((r) => r.hash);
+  const rewards = blockHashes.length
+    ? await db
+        .select({ blockHash: transaction.blockHash, reward: sql<string>`sum(${txOut.amount})` })
+        .from(transaction)
+        .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
+        .where(and(inArray(transaction.blockHash, blockHashes), eq(transaction.coinbase, true)))
+        .groupBy(transaction.blockHash)
+    : [];
+  const rewardByHash = new Map(rewards.map((r) => [r.blockHash, r.reward]));
+  return {
+    blocks: rows.map((r) => ({ ...r, reward: rewardByHash.get(r.hash) ?? null })),
+    pagination: { total, limit, offset, hasMore: offset + limit < total },
+  };
 }
 
 export async function getBlockByHashOrNumber(db: Database, hashOrNumber: string): Promise<Block | null> {
@@ -143,8 +157,17 @@ export async function getTransactions(
         .from(txOut).where(and(inArray(txOut.txHash, hashes), eq(txOut.n, 0)))
     : [];
   const typeByHash = new Map(firstOuts.map((o) => [o.txHash, o.valueType]));
+  // Transaction value = the sum of all of its outputs.
+  const values = hashes.length
+    ? await db
+        .select({ txHash: txOut.txHash, value: sql<string>`sum(${txOut.amount})` })
+        .from(txOut).where(inArray(txOut.txHash, hashes)).groupBy(txOut.txHash)
+    : [];
+  const valueByHash = new Map(values.map((v) => [v.txHash, v.value]));
   return {
-    transactions: rows.map((r) => ({ ...r, txType: typeByHash.get(r.hash) })),
+    transactions: rows.map((r) => ({
+      ...r, txType: typeByHash.get(r.hash), value: valueByHash.get(r.hash) ?? null,
+    })),
     pagination: { total, limit, offset, hasMore: offset + limit < total },
   };
 }

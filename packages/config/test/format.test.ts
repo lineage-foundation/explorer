@@ -9,6 +9,12 @@ describe("formatLngx", () => {
   it("returns 0 for null", () => {
     expect(formatLngx(null)).toBe("0");
   });
+  it("rounds to a fixed number of decimals when requested", () => {
+    // 108108000 / 72072000 = 1.5 -> 2dp "1.50"
+    expect(formatLngx("108108000", 2)).toBe("1.50");
+    // long fractional value rounded to 2dp
+    expect(formatLngx("100000000", 2)).toBe("1.39");
+  });
 });
 
 describe("formatLngxPlain", () => {

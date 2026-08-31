@@ -3,18 +3,21 @@ import type { TxListItem } from "@explorer/db";
 import {
   Table, THead, TBody, TR, TH, TD, Mono, Pill,
 } from "@explorer/ui";
-import { relativeTime, truncateHash, txTypeLabel } from "../../lib/format.js";
+import { relativeTime, truncateHash, txTypeLabel, formatLngx } from "../../lib/format.js";
 
 export function TxTable({ txs }: { txs: TxListItem[] }) {
   return (
     <Table fixed>
       <colgroup>
-        <col style={{ width: "42%" }} />
-        <col style={{ width: "18%" }} />
-        <col style={{ width: "16%" }} />
+        <col style={{ width: "34%" }} />
+        <col style={{ width: "13%" }} />
         <col style={{ width: "24%" }} />
+        <col style={{ width: "14%" }} />
+        <col style={{ width: "15%" }} />
       </colgroup>
-      <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Type</TH><TH>Age</TH></TR></THead>
+      <THead>
+        <TR><TH>Transaction</TH><TH>Block</TH><TH>Value</TH><TH>Type</TH><TH>Age</TH></TR>
+      </THead>
       <TBody>
         {txs.map((t) => {
           const label = txTypeLabel(t.txType, false);
@@ -30,6 +33,7 @@ export function TxTable({ txs }: { txs: TxListItem[] }) {
                   <Mono>{`#${t.blockNum.toLocaleString()}`}</Mono>
                 </Link>
               </TD>
+              <TD><Mono>{t.value === null ? "—" : formatLngx(t.value, 2)}</Mono></TD>
               <TD><Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill></TD>
               <TD><span suppressHydrationWarning className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
             </TR>

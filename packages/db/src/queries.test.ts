@@ -35,6 +35,7 @@ beforeAll(async () => {
   ]);
   await db().insert(txOut).values([
     { txId: 1, txHash: "tx_1", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr_1", n: 0 },
+    { txId: 2, txHash: "tx_cb", valueType: "token", amount: "1000", locktime: "0", scriptPublicKey: "miner", n: 0 },
   ]);
   await db().insert(txIn).values([
     { txId: 1, txHash: "tx_1", scriptSignature: {} },
@@ -60,6 +61,12 @@ describe("read queries", () => {
     expect(res.blocks[0]?.num).toBe(2);
     expect(res.pagination.total).toBe(2);
     expect(res.pagination.hasMore).toBe(false);
+  });
+
+  it("includes each block's coinbase reward (sum of mining-tx outputs)", async () => {
+    const res = await getBlocks(db(), { limit: 10, offset: 0, order: "desc" });
+    expect(res.blocks[0]?.reward).toBe("1000"); // block 2 has coinbase tx_cb (1000)
+    expect(res.blocks[1]?.reward).toBeNull(); // block 1 has no coinbase output
   });
 
   it("reports hasMore when more blocks remain beyond the page", async () => {
@@ -91,10 +98,14 @@ describe("read queries", () => {
     expect(res?.transactions[1]?.coinbase).toBe(false);
   });
 
-  it("lists transactions excluding coinbase", async () => {
+  it("lists transactions excluding coinbase with block number and total value", async () => {
     const res = await getTransactions(db(), { limit: 10, offset: 0, order: "desc" });
     expect(res.transactions.map((t) => t.hash)).toEqual(["tx_2", "tx_1"]);
     expect(res.pagination.total).toBe(2);
+    const tx1 = res.transactions.find((t) => t.hash === "tx_1");
+    expect(tx1?.blockNum).toBe(1);
+    expect(tx1?.value).toBe("500"); // sum of tx_1 outputs
+    expect(res.transactions.find((t) => t.hash === "tx_2")?.value).toBeNull(); // no outputs
   });
 
   it("counts non-coinbase transactions", async () => {

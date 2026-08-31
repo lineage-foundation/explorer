@@ -10,10 +10,10 @@ import { LatestFeed } from "../LatestFeed.js";
 
 const snap = {
   blocks: [
-    { version: 1, num: 5, hash: "b5", previousHash: "b4", timestamp: new Date(), nbTx: 2 },
+    { version: 1, num: 5, hash: "b5", previousHash: "b4", timestamp: new Date(), nbTx: 2, reward: "72072000" },
   ],
   txs: [
-    { hash: "tx_abcdef0123", blockHash: "b5", blockNum: 5, version: 1, timestamp: new Date(), txType: "token" },
+    { hash: "tx_abcdef0123", blockHash: "b5", blockNum: 5, version: 1, timestamp: new Date(), txType: "token", value: "72072000" },
   ],
   blocksCount: 6,
   txCount: 1,

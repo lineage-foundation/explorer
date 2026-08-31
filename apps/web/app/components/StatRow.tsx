@@ -9,7 +9,7 @@ export function StatRow({
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <Stat label="Total blocks" value={blocksCount.toLocaleString()} />
       <Stat label="Transactions" value={txCount.toLocaleString()} />
-      <Stat label="Circulating supply" value={formatLngx(circulatingSupply)} unit={TOKEN_TICKER} />
+      <Stat label="Circulating supply" value={formatLngx(circulatingSupply, 2)} unit={TOKEN_TICKER} />
     </div>
   );
 }
