@@ -25,9 +25,13 @@ test("block detail shows reward, miner, and prev/next navigation", async ({ page
   await expect(page.getByText("Miner")).toBeVisible();
   await expect(page.getByRole("link", { name: /Block #1/ })).toHaveAttribute("href", "/block/1");
   await expect(page.getByRole("link", { name: /← Block/ })).toHaveCount(0);
+  // Miner field links to the coinbase output address.
+  await expect(page.getByRole("link", { name: "addrA" })).toHaveAttribute("href", "/address/addrA");
   // Latest indexed block (1): a prev link to block 0.
   await page.goto("/block/1");
   await expect(page.getByRole("link", { name: /← Block #0/ })).toHaveAttribute("href", "/block/0");
+  // Latest block: no "next" link.
+  await expect(page.getByRole("link", { name: /Block #2/ })).toHaveCount(0);
 });
 
 test("transaction detail shows resolved input address and outputs", async ({ page }) => {
