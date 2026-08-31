@@ -4,6 +4,17 @@ import type { LineageBlock, LineageNodeConfig, LineageTransaction } from "./type
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const MAX_ATTEMPTS = 3;
 const RETRY_BACKOFF_MS = 200;
+// Heights per `/v1/blocks?num=…` GET, kept small so the URL never approaches
+// server query-string limits on a full ingest range.
+const BLOCK_NUM_CHUNK = 100;
+
+// A `/v1` blockchain entry: a block's `data` is `{ block: … }`; a tx's `data`
+// is the transaction itself. `item_meta` is ignored by the explorer.
+interface BlockchainEntry<T> {
+  key: string;
+  item_meta: unknown;
+  data: T;
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -17,12 +28,12 @@ export class LineageNodeClient {
   }
 
   /**
-   * Fetch and JSON-parse a node response, tolerating the transient empty/error
-   * bodies the nodes occasionally return under load. A non-2xx status, an empty
-   * body, or invalid JSON is retried a few times with a short backoff; if it
-   * never resolves, we throw a descriptive error (label + url + status/snippet)
-   * rather than a bare `SyntaxError: Unexpected end of JSON input`, so a failing
-   * ingest cycle is diagnosable.
+   * Fetch and JSON-parse a `/v1` response, tolerating the transient empty/error
+   * bodies the nodes occasionally return under load. A non-2xx status (with its
+   * `application/problem+json` body), an empty body, or invalid JSON is retried
+   * a few times with a short backoff; if it never resolves we throw a
+   * descriptive error (label + url + status/snippet) rather than a bare
+   * `SyntaxError`, so a failing ingest cycle is diagnosable.
    */
   private async fetchJson<T>(
     url: string,
@@ -52,39 +63,32 @@ export class LineageNodeClient {
   }
 
   async getLatestBlock(): Promise<LineageBlock> {
-    const data = await this.fetchJson<{ content: { block: LineageBlock } }>(
-      `${this.config.storageNodeUrl}/latest_block`,
+    const data = await this.fetchJson<{ block: { block: LineageBlock } }>(
+      `${this.config.storageNodeUrl}/v1/blocks/latest`,
       undefined,
       "getLatestBlock",
       15000,
     );
-    return data.content.block;
+    return data.block.block;
   }
 
   async getBlockRange(
     startBlock: number,
     endBlock: number,
   ): Promise<[string, Record<"block", LineageBlock>][]> {
-    const blocks = [...Array(endBlock - startBlock + 1).keys()].map((b) => b + startBlock);
-    const data = await this.fetchJson<{ content: [string, Record<"block", LineageBlock>][] }>(
-      `${this.config.storageNodeUrl}/block_by_num`,
-      { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(blocks) },
-      "getBlockRange",
-      30000,
-    );
-    return data.content;
-  }
-
-  async getTransactionByHash(hash: string): Promise<[[string, LineageTransaction]]> {
-    // /blockchain_entry expects a JSON array of hashes and rejects a bare
-    // string with 400; send a one-element array, same as the batch path.
-    const data = await this.fetchJson<{ content: [[string, LineageTransaction]] }>(
-      `${this.config.storageNodeUrl}/blockchain_entry`,
-      { method: "POST", headers: JSON_HEADERS, body: `["${hash}"]` },
-      "getTransactionByHash",
-      30000,
-    );
-    return data.content;
+    const out: [string, Record<"block", LineageBlock>][] = [];
+    for (let from = startBlock; from <= endBlock; from += BLOCK_NUM_CHUNK) {
+      const to = Math.min(from + BLOCK_NUM_CHUNK - 1, endBlock);
+      const query = [...Array(to - from + 1).keys()].map((b) => `num=${b + from}`).join("&");
+      const entries = await this.fetchJson<BlockchainEntry<{ block: LineageBlock }>[]>(
+        `${this.config.storageNodeUrl}/v1/blocks?${query}`,
+        undefined,
+        "getBlockRange",
+        30000,
+      );
+      for (const entry of entries) out.push([entry.key, { block: entry.data.block }]);
+    }
+    return out;
   }
 
   async getTransactionsByHash(
@@ -115,14 +119,13 @@ export class LineageNodeClient {
 
   private async fetchBatch(batchHashes: string[]): Promise<[string, LineageTransaction][]> {
     try {
-      const body = `[${batchHashes.map((h) => `"${h}"`).join(",")}]`;
-      const data = await this.fetchJson<{ content: [string, LineageTransaction][] }>(
-        `${this.config.storageNodeUrl}/blockchain_entry`,
-        { method: "POST", headers: JSON_HEADERS, body },
+      const entries = await this.fetchJson<BlockchainEntry<LineageTransaction>[]>(
+        `${this.config.storageNodeUrl}/v1/blockchain-entries/query`,
+        { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ keys: batchHashes }) },
         "fetchBatch",
         30000,
       );
-      return data.content;
+      return entries.map((entry) => [entry.key, entry.data]);
     } catch {
       return [];
     }
@@ -134,32 +137,25 @@ export class LineageNodeClient {
 
   getIssuedSupply(): Promise<string> {
     const base = this.config.mempoolNodeUrl || this.config.storageNodeUrl;
-    const url = this.config.issuedSupplyUrl || `${base}/issued_supply`;
-    return this.fetchSupply(url);
+    return this.fetchSupplyField(`${base}/v1/supply`, "issued");
   }
 
   getTotalSupply(): Promise<string> {
     const base = this.config.mempoolNodeUrl || this.config.storageNodeUrl;
-    const url = this.config.totalSupplyUrl || `${base}/total_supply`;
-    return this.fetchSupply(url);
+    return this.fetchSupplyField(`${base}/v1/supply`, "total");
   }
 
-  private async fetchSupply(url: string): Promise<string> {
+  /**
+   * `/v1/supply` returns `total`/`issued` as JSON integers that exceed 2^53, so
+   * `JSON.parse` would lose precision. Read the response as raw text and extract
+   * the requested field's digit run, then hand the string to BigNumber.
+   */
+  private async fetchSupplyField(url: string, field: "issued" | "total"): Promise<string> {
     try {
       const res = await this.fetchImpl(url, { signal: AbortSignal.timeout(15000) });
       const text = await res.text();
-      const match = text.match(/"content"\s*:\s*("?\d+"?)/);
-      if (match?.[1]) {
-        return new BigNumber(match[1].replace(/"/g, "")).toFixed(0);
-      }
-      try {
-        const data = JSON.parse(text) as { content?: unknown };
-        if (data?.content !== undefined && data?.content !== null) {
-          return new BigNumber(String(data.content)).toFixed(0);
-        }
-      } catch {
-        /* fall through to "0" */
-      }
+      const match = text.match(new RegExp(`"${field}"\\s*:\\s*(\\d+)`));
+      if (match?.[1]) return new BigNumber(match[1]).toFixed(0);
       return "0";
     } catch {
       return "0";

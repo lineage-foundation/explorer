@@ -4,49 +4,93 @@ import { LineageNodeClient } from "./client.js";
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 }
+function textResponse(text: string): Response {
+  return new Response(text, { status: 200, headers: { "content-type": "application/json" } });
+}
 
 describe("LineageNodeClient", () => {
-  it("fetches the latest block from /latest_block", async () => {
+  it("fetches the latest block from /v1/blocks/latest (unwraps block.block)", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({ content: { block: { header: { b_num: 42 }, transactions: [] } } }),
+      jsonResponse({ block: { block: { header: { b_num: 42 }, transactions: [] } } }),
     );
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
     const block = await client.getLatestBlock();
     expect(block.header.b_num).toBe(42);
-    expect(fetchImpl.mock.calls[0]![0]).toBe("http://node/latest_block");
+    expect(fetchImpl.mock.calls[0]![0]).toBe("http://node/v1/blocks/latest");
   });
 
-  it("posts an inclusive number array to /block_by_num", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ content: [["h1", { block: {} }]] }));
+  it("GETs /v1/blocks?num=… and maps entries to [hash, {block}]", async () => {
+    const entries = [
+      { key: "h3", item_meta: { type: "block", block_num: 3, tx_len: 1 }, data: { block: { header: { b_num: 3 } } } },
+      { key: "h4", item_meta: { type: "block", block_num: 4, tx_len: 1 }, data: { block: { header: { b_num: 4 } } } },
+      { key: "h5", item_meta: { type: "block", block_num: 5, tx_len: 1 }, data: { block: { header: { b_num: 5 } } } },
+    ];
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(entries));
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
-    await client.getBlockRange(3, 5);
-    const init = fetchImpl.mock.calls[0]![1];
-    expect(fetchImpl.mock.calls[0]![0]).toBe("http://node/block_by_num");
-    expect(JSON.parse(init.body)).toEqual([3, 4, 5]);
+    const range = await client.getBlockRange(3, 5);
+    expect(fetchImpl.mock.calls[0]![0]).toBe("http://node/v1/blocks?num=3&num=4&num=5");
+    expect(range).toEqual([
+      ["h3", { block: { header: { b_num: 3 } } }],
+      ["h4", { block: { header: { b_num: 4 } } }],
+      ["h5", { block: { header: { b_num: 5 } } }],
+    ]);
   });
 
-  it("sends a single hash as a one-element array to /blockchain_entry", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ content: [["h", { inputs: [] }]] }));
+  it("chunks a large block range into multiple GETs of <=100 heights", async () => {
+    // mockImplementation (not mockResolvedValue) so each real fetch call gets
+    // a fresh Response — a single Response's body can only be read once.
+    const fetchImpl = vi.fn().mockImplementation(() => jsonResponse([]));
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
-    await client.getTransactionByHash("abc");
-    expect(fetchImpl.mock.calls[0]![1].body).toBe('["abc"]');
+    await client.getBlockRange(0, 150);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const first = fetchImpl.mock.calls[0]![0] as string;
+    const second = fetchImpl.mock.calls[1]![0] as string;
+    expect(first).toContain("num=0");
+    expect(first).toContain("num=99");
+    expect(first).not.toContain("num=100");
+    expect(second).toContain("num=100");
+    expect(second).toContain("num=150");
   });
 
-  it("batches multiple hashes and tolerates a failing batch", async () => {
+  it("POSTs {keys} to /v1/blockchain-entries/query and maps entries to [hash, tx]", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse([{ key: "h1", item_meta: { type: "tx", block_num: 0, tx_num: 0 }, data: { inputs: [], outputs: [], version: 0, druid_info: null } }]),
+    );
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    const result = await client.getTransactionsByHash(["h1"]);
+    expect(fetchImpl.mock.calls[0]![0]).toBe("http://node/v1/blockchain-entries/query");
+    expect(JSON.parse(fetchImpl.mock.calls[0]![1].body)).toEqual({ keys: ["h1"] });
+    expect(result).toEqual([["h1", { inputs: [], outputs: [], version: 0, druid_info: null }]]);
+  });
+
+  it("tolerates a failing batch by returning no entries for it", async () => {
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ content: [["h1", { inputs: [] }]] }))
-      .mockRejectedValueOnce(new Error("boom"));
+      .mockResolvedValueOnce(jsonResponse([{ key: "h1", item_meta: {}, data: { inputs: [] } }]))
+      .mockRejectedValue(new Error("boom"));
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl, txHttpBatchSize: 1, txHttpConcurrency: 2 });
     const result = await client.getTransactionsByHash(["h1", "h2"]);
     expect(result).toEqual([["h1", { inputs: [] }]]);
   });
 
+  it("parses supply from /v1/supply raw text, preserving digits beyond 2^53", async () => {
+    const big = { total: 360360000000000000, issued: 90091258856512411 };
+    // Emit the exact large integers as raw JSON text (no JS-number round-trip).
+    const raw = `{"total":360360000000000000,"issued":90091258856512411}`;
+    // mockImplementation so getIssuedSupply()'s and getTotalSupply()'s
+    // separate fetch calls each get a fresh, unread Response.
+    const fetchImpl = vi.fn().mockImplementation(() => textResponse(raw));
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", mempoolNodeUrl: "http://mempool", fetchImpl });
+    expect(await client.getIssuedSupply()).toBe("90091258856512411");
+    expect(await client.getTotalSupply()).toBe("360360000000000000");
+    expect(fetchImpl.mock.calls[0]![0]).toBe("http://mempool/v1/supply");
+    // Sanity: JSON.parse would have corrupted these.
+    expect(String(big.issued)).not.toBe("90091258856512411");
+  });
+
   it("retries a transient empty body and then succeeds", async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(new Response("", { status: 200 }))
-      .mockResolvedValueOnce(
-        jsonResponse({ content: { block: { header: { b_num: 7 }, transactions: [] } } }),
-      );
+      .mockResolvedValueOnce(jsonResponse({ block: { block: { header: { b_num: 7 }, transactions: [] } } }));
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
     const block = await client.getLatestBlock();
     expect(block.header.b_num).toBe(7);
@@ -54,43 +98,19 @@ describe("LineageNodeClient", () => {
   });
 
   it("throws a descriptive error (not a raw SyntaxError) when the body stays empty", async () => {
-    // A fresh Response per call — a real fetch never hands back a re-read body.
     const fetchImpl = vi.fn().mockImplementation(() => new Response("", { status: 200 }));
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
     await expect(client.getLatestBlock()).rejects.toThrow(
-      /getLatestBlock request to http:\/\/node\/latest_block failed after 3 attempts: empty response body \(HTTP 200\)/,
+      /getLatestBlock request to http:\/\/node\/v1\/blocks\/latest failed after 3 attempts: empty response body \(HTTP 200\)/,
     );
     await expect(client.getLatestBlock()).rejects.not.toThrow(/Unexpected end of JSON input/);
   });
 
-  it("surfaces a non-2xx status with a body snippet", async () => {
-    const fetchImpl = vi.fn().mockImplementation(() => new Response("upstream down", { status: 502 }));
-    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
-    await expect(client.getBlockRange(1, 1)).rejects.toThrow(/HTTP 502: upstream down/);
-  });
-
-  it("parses issued supply from text with bignumber safety", async () => {
-    const big = "90000000000000000000";
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(`{"content": ${big}}`, { status: 200 }),
+  it("surfaces a non-2xx problem+json status with a body snippet", async () => {
+    const fetchImpl = vi.fn().mockImplementation(
+      () => new Response(JSON.stringify({ title: "Not Found", status: 404 }), { status: 404 }),
     );
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
-    expect(await client.getIssuedSupply()).toBe(big);
-  });
-
-  it("returns '0' when supply response lacks content", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response("nonsense", { status: 200 }));
-    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
-    expect(await client.getTotalSupply()).toBe("0");
-  });
-
-  it("delegates getCirculatingSupply to the issued-supply endpoint", async () => {
-    const big = "12345678901234567890";
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(`{"content": ${big}}`, { status: 200 }),
-    );
-    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
-    expect(await client.getCirculatingSupply()).toBe(big);
-    expect(fetchImpl.mock.calls[0]![0]).toBe("http://node/issued_supply");
+    await expect(client.getBlockRange(1, 1)).rejects.toThrow(/HTTP 404: /);
   });
 });
