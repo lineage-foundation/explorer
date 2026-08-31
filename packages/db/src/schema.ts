@@ -23,6 +23,10 @@ export const block = pgTable(
   (t) => ({
     hashUnique: uniqueIndex("UK_block_hash").on(t.hash),
     numUnique: uniqueIndex("UK_block_num").on(t.num),
+    // Supports LIKE 'prefix%' search on block hashes under a non-C collation.
+    // NOTE: drizzle-kit 0.24 omits the operator class from generated SQL, so the
+    // `varchar_pattern_ops` class is applied by hand in the migration file.
+    hashPrefix: index("IX_block_hash_prefix").on(t.hash.op("varchar_pattern_ops")),
   }),
 );
 
@@ -41,6 +45,8 @@ export const transaction = pgTable(
   },
   (t) => ({
     hashUnique: uniqueIndex("UK_transaction_hash").on(t.hash),
+    // Supports LIKE 'prefix%' search on transaction hashes under a non-C collation.
+    hashPrefix: index("IX_transaction_hash_prefix").on(t.hash.op("varchar_pattern_ops")),
     blockFk: foreignKey({
       columns: [t.blockHash],
       foreignColumns: [block.hash],
@@ -93,6 +99,8 @@ export const txOut = pgTable(
       name: "FK_tx_out_tx_hash_transaction_hash",
     }),
     txHashNIdx: index("IX_tx_out_txHash_n").on(t.txHash, t.n),
+    // Supports LIKE 'prefix%' address search under a non-C collation.
+    scriptPubKeyPrefix: index("IX_tx_out_scriptPublicKey_prefix").on(t.scriptPublicKey.op("varchar_pattern_ops")),
   }),
 );
 

@@ -8,6 +8,13 @@
       "when": 1787914809207,
       "tag": "0000_spicy_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788160689634,
+      "tag": "0001_daffy_shaman",
+      "breakpoints": true
     }
   ]
 }

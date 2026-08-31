@@ -13,13 +13,19 @@ const APP_TABLES = [
   "circulating_supply",
 ] as const;
 
-function migrationSql(): string {
+// All committed migration statements, in order across every migration file.
+function migrationStatements(): string[] {
   const drizzleDir = join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
-  const file = readdirSync(drizzleDir)
+  const files = readdirSync(drizzleDir)
     .filter((name) => name.endsWith(".sql"))
-    .sort()[0];
-  if (!file) throw new Error(`No migration .sql found in ${drizzleDir}`);
-  return readFileSync(join(drizzleDir, file), "utf8");
+    .sort();
+  if (files.length === 0) throw new Error(`No migration .sql found in ${drizzleDir}`);
+  return files.flatMap((file) =>
+    readFileSync(join(drizzleDir, file), "utf8")
+      .split("--> statement-breakpoint")
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0),
+  );
 }
 
 /**
@@ -37,11 +43,7 @@ function migrationSql(): string {
 export async function resetTestSchema(connectionString: string): Promise<void> {
   const sql = postgres(connectionString, { max: 1 });
   try {
-    const statements = migrationSql()
-      .split("--> statement-breakpoint")
-      .map((statement) => statement.trim())
-      .filter((statement) => statement.length > 0);
-    for (const statement of statements) {
+    for (const statement of migrationStatements()) {
       await sql.unsafe(statement);
     }
     await sql.unsafe(
