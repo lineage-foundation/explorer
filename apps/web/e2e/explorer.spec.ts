@@ -62,3 +62,21 @@ test("unknown id 404s", async ({ page }) => {
   const res = await page.goto("/block/does-not-exist-hash");
   expect(res?.status()).toBe(404);
 });
+
+test("block and transaction detail show confirmation counts", async ({ page }) => {
+  // Tip is block 1 (seed). Genesis (block 0) => 1 - 0 + 1 = 2 confirmations.
+  await page.goto("/block/0");
+  await expect(
+    page.getByText("Confirmations", { exact: true }).locator("xpath=following-sibling::div"),
+  ).toHaveText("2");
+  // Latest block (1) => 1 confirmation.
+  await page.goto("/block/1");
+  await expect(
+    page.getByText("Confirmations", { exact: true }).locator("xpath=following-sibling::div"),
+  ).toHaveText("1");
+  // Transaction t0 is in block 0 => 2 confirmations.
+  await page.goto("/transaction/t0");
+  await expect(
+    page.getByText("Confirmations", { exact: true }).locator("xpath=following-sibling::div"),
+  ).toHaveText("2");
+});

@@ -8,7 +8,7 @@ import {
 import { getDb } from "../../../lib/db.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import {
-  absoluteTime, relativeTime, truncateHash, txTypeLabel, formatLngx,
+  absoluteTime, relativeTime, truncateHash, txTypeLabel, formatLngx, confirmations,
 } from "../../../lib/format.js";
 
 export const revalidate = 3600;
@@ -78,6 +78,7 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
           <Field label="Version">{block.version}</Field>
           <Field label="Bits">{block.bits !== null ? block.bits.toString() : "—"}</Field>
           <Field label="Transactions">{block.nbTx ?? 0}</Field>
+          <Field label="Confirmations">{confirmations(maxNum, block.num).toLocaleString()}</Field>
           <Field label="Reward">{coinbase.reward === null ? "—" : `${formatLngx(coinbase.reward, 2)} LNGX`}</Field>
           <Field label="Miner">
             {coinbase.miner

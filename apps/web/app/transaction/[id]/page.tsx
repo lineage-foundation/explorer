@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getDb } from "../../../lib/db.js";
-import { getTransactionByHash, getBlockByHashOrNumber } from "@explorer/db";
+import { getTransactionByHash, getBlockByHashOrNumber, getMaxBlockNum } from "@explorer/db";
 import { PageHeader } from "../../components/PageHeader.js";
 import { InputsOutputs } from "../../components/InputsOutputs.js";
 import { Card, Pill, CopyButton } from "@explorer/ui";
 import {
-  absoluteTime, relativeTime, truncateHash, txTypeLabel,
+  absoluteTime, relativeTime, truncateHash, txTypeLabel, confirmations,
 } from "../../../lib/format.js";
 
 export const revalidate = 3600;
@@ -26,6 +26,7 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
   const tx = await getTransactionByHash(db, id);
   if (!tx) notFound();
   const block = await getBlockByHashOrNumber(db, tx.blockHash);
+  const maxNum = await getMaxBlockNum(db);
   const coinbase = block?.nonceAndMiningTxHash && Array.isArray(block.nonceAndMiningTxHash)
     ? block.nonceAndMiningTxHash[1] === tx.hash
     : false;
@@ -45,6 +46,7 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
           <MetaItem label="Block"><Link href={`/block/${tx.blockHash}`} className="text-link hover:text-link-hover">{block ? `#${block.num.toLocaleString()}` : "—"}</Link></MetaItem>
           <MetaItem label="Timestamp">{absoluteTime(tx.timestamp)} <span className="text-text-subtle">({relativeTime(tx.timestamp)})</span></MetaItem>
           <MetaItem label="Version">{tx.version}</MetaItem>
+          <MetaItem label="Confirmations">{block ? confirmations(maxNum, block.num).toLocaleString() : "—"}</MetaItem>
         </div>
       </Card>
       <InputsOutputs tx={tx} coinbase={coinbase} />
