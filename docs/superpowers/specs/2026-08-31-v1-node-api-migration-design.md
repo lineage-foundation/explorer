@@ -129,13 +129,13 @@ types, never the SDK runtime.
 packages/chain/src/client.ts           modify — /v1 endpoints, mapping, block-range chunking
 packages/chain/src/types.ts            modify — LineageNodeConfig (drop supply URLs); refresh comment
 packages/chain/src/client.test.ts      modify — assert /v1 URLs, {keys}/?num= requests, entry→tuple + supply parsing
-apps/indexer/src/config.ts             modify — IndexerConfig + loadConfig (drop supply URLs, add apiKey)
-apps/indexer/src/index.ts              modify — construct client with apiKey, not supply URLs
+apps/indexer/src/config.ts             modify — IndexerConfig + loadConfig (drop supply URLs)
+apps/indexer/src/index.ts              modify — construct client without the supply URLs
 apps/indexer/src/__tests__/config.test.ts  modify (if it asserts the removed fields)
-.env.example                           modify — remove 2 supply vars, add commented LINEAGE_API_KEY
-turbo.json                             modify — passThroughEnv: drop 2 supply vars, add LINEAGE_API_KEY
+.env.example                           modify — remove the 2 supply vars
+turbo.json                             modify — passThroughEnv: drop the 2 supply vars
 docker-compose.yml / docker-compose.dev.yml  modify (if they set the supply URLs)
-README.md                              modify — document the /v1 node API + LINEAGE_API_KEY
+README.md                              modify — document the /v1 node API
 ```
 
 ## Testing
