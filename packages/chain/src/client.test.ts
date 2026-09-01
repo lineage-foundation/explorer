@@ -74,7 +74,6 @@ describe("LineageNodeClient", () => {
   });
 
   it("parses supply from /v1/supply raw text, preserving digits beyond 2^53", async () => {
-    const big = { total: 360360000000000000, issued: 90091258856512411 };
     // Emit the exact large integers as raw JSON text (no JS-number round-trip).
     const raw = `{"total":360360000000000000,"issued":90091258856512411}`;
     // mockImplementation so getIssuedSupply()'s and getTotalSupply()'s
@@ -84,8 +83,8 @@ describe("LineageNodeClient", () => {
     expect(await client.getIssuedSupply()).toBe("90091258856512411");
     expect(await client.getTotalSupply()).toBe("360360000000000000");
     expect(fetchImpl.mock.calls[0]![0]).toBe("http://mempool/v1/supply");
-    // Sanity: JSON.parse would have corrupted these.
-    expect(String(big.issued)).not.toBe("90091258856512411");
+    // Sanity: routing this through a JS number (as JSON.parse would) corrupts it.
+    expect(String(Number("90091258856512411"))).not.toBe("90091258856512411");
   });
 
   it("retries a transient empty body and then succeeds", async () => {

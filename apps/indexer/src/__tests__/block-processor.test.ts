@@ -40,7 +40,6 @@ describe("processBlock", () => {
     expect((await getAccountBalance(db(), "A")).balance).toBe("140");
 
     // block 1: t3 spends A's 40-token output (t1, n0), sending 40 to B
-    const t1n0 = outs.find((o) => o.txHash === "t1" && o.n === 0)!;
     const block1 = buildBlock({ num: 1, hash: "H1", previousHash: "H0", miningTxHash: "cb1", txHashes: ["t3"] });
     const cb1 = buildTokenTx([{ address: "A", amount: 100 }]);
     const t3 = buildSpendTx({ prevHash: "t1", n: 0 }, [{ address: "B", amount: 40 }]);

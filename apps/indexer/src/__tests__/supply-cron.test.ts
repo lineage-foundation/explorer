@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { createDb, type Database, schema, getCirculatingSupply } from "@explorer/db";
 import { createSupplyCron } from "../supply-cron.js";
 import { FakeSourceClient } from "./fake-source.js";

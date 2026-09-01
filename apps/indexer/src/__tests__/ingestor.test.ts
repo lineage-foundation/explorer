@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { createDb, type Database, schema, getBlocks, getMaxBlockNum } from "@explorer/db";
 import { createIngestor, ContinuityError, MissingTransactionError } from "../ingestor.js";
 import { loadConfig } from "../config.js";
-import { FakeSourceClient, buildBlock, buildTokenTx, buildSpendTx } from "./fake-source.js";
+import { FakeSourceClient, buildBlock, buildTokenTx } from "./fake-source.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@127.0.0.1:5432/explorer_test";
 const noopLogger = { info: () => {}, error: () => {}, warn: () => {} };
