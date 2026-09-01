@@ -83,7 +83,42 @@ describe("worker end-to-end", () => {
       await worker.stop();
     }
   });
+
+  it("stop() drains the in-flight cycle before releasing the lock", async () => {
+    let releaseCycle!: () => void;
+    const gate = new Promise<void>((r) => { releaseCycle = r; });
+    let cycleFinished = false;
+    const base = new FakeSourceClient();
+    base.addBlock("H0", buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: [] }));
+    base.addTx("cb0", buildTokenTx([{ address: "M", amount: 1 }]));
+    const source = {
+      getLatestBlock: async () => { await gate; cycleFinished = true; return base.getLatestBlock(); },
+      getBlockRange: (s: number, e: number) => base.getBlockRange(s, e),
+      getTransactionsByHash: (h: string[]) => base.getTransactionsByHash(h),
+      getCirculatingSupply: () => base.getCirculatingSupply(),
+    };
+    const config = loadConfig({ DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", HEALTH_PORT: "", INDEXER_POLL_INTERVAL_MS: "5" });
+    const worker = createWorker({ config, db: handle.db, sql: handle.sql, source, logger: noopLogger });
+    await worker.start();
+    await sleep(20); // let the loop reach the gated getLatestBlock
+
+    const stopped = worker.stop();
+    let stopResolved = false;
+    void stopped.then(() => { stopResolved = true; });
+    await sleep(20);
+    // stop() must still be pending while the cycle is in-flight
+    expect(stopResolved).toBe(false);
+    expect(cycleFinished).toBe(false);
+
+    releaseCycle();
+    await stopped;
+    expect(cycleFinished).toBe(true);
+  });
 });
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 async function waitFor(cond: () => boolean, timeoutMs = 3000): Promise<void> {
   const start = Date.now();

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { createDb, type Database, schema, getAccountBalance } from "@explorer/db";
 import { processBlock } from "../block-processor.js";
 import { buildBlock, buildTokenTx, buildSpendTx } from "./fake-source.js";
@@ -110,5 +110,38 @@ describe("processBlock", () => {
     });
     const txs = await db().select().from(schema.transaction);
     expect(txs.map((t) => t.hash)).toEqual(["cb0"]);
+  });
+
+  it("warns when a spent output is neither indexed nor skipped", async () => {
+    const warn = vi.fn();
+    const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["t1"] });
+    await processBlock(db(), {
+      blockHash: "H0", block,
+      transactions: [
+        { hash: "cb0", tx: buildTokenTx([{ address: "A", amount: 5 }]), coinbase: true },
+        { hash: "t1", tx: buildSpendTx({ prevHash: "ghost", n: 0 }, [{ address: "B", amount: 5 }]), coinbase: false },
+      ],
+      skip: new Set(),
+      logger: { warn },
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "input.unresolved", prevOutTxHash: "ghost" }),
+      expect.any(String),
+    );
+  });
+
+  it("stays silent when the unresolved input references a skipped tx", async () => {
+    const warn = vi.fn();
+    const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["t1"] });
+    await processBlock(db(), {
+      blockHash: "H0", block,
+      transactions: [
+        { hash: "cb0", tx: buildTokenTx([{ address: "A", amount: 5 }]), coinbase: true },
+        { hash: "t1", tx: buildSpendTx({ prevHash: "skipme", n: 0 }, [{ address: "B", amount: 5 }]), coinbase: false },
+      ],
+      skip: new Set(["skipme"]),
+      logger: { warn },
+    });
+    expect(warn).not.toHaveBeenCalled();
   });
 });

@@ -102,6 +102,20 @@ it("does not wipe indexed data when the tip probe is momentarily inconclusive", 
   expect(await getMaxBlockNum(db())).toBe(3); // untouched, no destructive wipe
 });
 
+it("reports processedTo as the last block actually returned, not the requested top", async () => {
+  const source = new FakeSourceClient(); chainOf(5, source);
+  // Source claims tip 5 but serves only blocks 0..3 this cycle (short range).
+  const short = {
+    getLatestBlock: () => source.getLatestBlock(),
+    getBlockRange: (s: number, e: number) => source.getBlockRange(s, Math.min(e, 3)),
+    getTransactionsByHash: (h: string[]) => source.getTransactionsByHash(h),
+    getCirculatingSupply: () => source.getCirculatingSupply(),
+  };
+  const res = await createIngestor({ db: db(), source: short, config: cfg(), logger: noopLogger }).runCycle();
+  expect(res.processedTo).toBe(3); // not the requested 5
+  expect(await getMaxBlockNum(db())).toBe(3);
+});
+
 it("halts with ContinuityError on a previous_hash mismatch", async () => {
   const source = new FakeSourceClient(); chainOf(1, source);
   // corrupt block 1 to point at a wrong previous hash

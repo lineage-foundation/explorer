@@ -27,6 +27,7 @@ export function createWorker(deps: {
   let running = false;
   let supplyTimer: NodeJS.Timeout | null = null;
   let healthServer: ReturnType<typeof createHealthServer> | null = null;
+  let loopPromise: Promise<void> | null = null;
   const status: Status = {
     lastIndexedBlock: null,
     chainTip: null,
@@ -104,12 +105,17 @@ export function createWorker(deps: {
         });
       }, config.supplyCronIntervalMs);
       logger.info({ event: "worker.start" }, "indexer started");
-      void loop();
+      loopPromise = loop();
     },
     async stop() {
       if (!running) return;
       running = false;
       if (supplyTimer) clearInterval(supplyTimer);
+      // Drain the in-flight cycle before releasing the lock: otherwise a
+      // replacement instance could acquire the freed lock and start writing
+      // while this one's current cycle is still committing blocks.
+      if (loopPromise) await loopPromise;
+      loopPromise = null;
       if (healthServer) await healthServer.stop();
       await lock.release();
       logger.info({ event: "worker.stop" }, "indexer stopped");

@@ -65,6 +65,13 @@ export function createIngestor(deps: {
       const range = await source.getBlockRange(from, to);
       range.sort((a, b) => a[1].block.header.b_num - b[1].block.header.b_num);
 
+      // The source can return fewer blocks than requested (e.g. under load); only
+      // advance progress by what was actually ingested, not the requested `to`.
+      if (range.length === 0) {
+        logger.warn({ event: "range.empty", from, to }, "source returned no blocks for requested range");
+        return { caughtUp: false };
+      }
+
       let prevHash = from > config.genesisHeight ? await getBlockHashByNum(db, from - 1) : null;
       for (const [blockHash, wrapper] of range) {
         const block = wrapper.block;
@@ -78,8 +85,9 @@ export function createIngestor(deps: {
         await ingestOne(db, block, blockHash, source, skip, logger);
         prevHash = blockHash;
       }
-      logger.info({ event: "range.processed", from, to }, "processed block range");
-      return { caughtUp: false, processedTo: to };
+      const processedTo = range[range.length - 1]![1].block.header.b_num;
+      logger.info({ event: "range.processed", from, to: processedTo }, "processed block range");
+      return { caughtUp: false, processedTo };
     },
   };
 }
@@ -140,5 +148,5 @@ async function ingestOne(
     }
     transactions.push({ hash, tx, coinbase: isCoinbase.get(hash) === true });
   }
-  await processBlock(db, { blockHash, block, transactions, skip });
+  await processBlock(db, { blockHash, block, transactions, skip, logger });
 }

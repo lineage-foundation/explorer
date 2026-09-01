@@ -11,9 +11,12 @@ interface ResolvedOut { id: number; scriptPublicKey: string | null; isToken: boo
 
 export async function processBlock(
   db: Database,
-  args: { blockHash: string; block: LineageBlock; transactions: PreparedTx[]; skip: Set<string> },
+  args: {
+    blockHash: string; block: LineageBlock; transactions: PreparedTx[]; skip: Set<string>;
+    logger?: { warn: (obj: unknown, msg?: string) => void };
+  },
 ): Promise<void> {
-  const { blockHash, block, transactions, skip } = args;
+  const { blockHash, block, transactions, skip, logger } = args;
   const blockRow = mapBlockRow(blockHash, block);
 
   await db.transaction(async (tx) => {
@@ -65,7 +68,18 @@ export async function processBlock(
         });
         if (!prev || typeof prev.n !== "number") continue;
         const resolved = await resolveOut(tx, outIdsByRef, prev.t_hash, prev.n);
-        if (!resolved) continue;
+        if (!resolved) {
+          // Distinguish an intentional skip (the referenced tx is in
+          // skipTxHashes, so its outputs were never inserted) from a genuine
+          // dangling reference — silent data loss otherwise.
+          if (!skip.has(prev.t_hash)) {
+            logger?.warn(
+              { event: "input.unresolved", txHash: p.hash, prevOutTxHash: prev.t_hash, prevOutTxN: prev.n, block: block.header.b_num },
+              "spent output is neither indexed nor skipped — balance may be incomplete",
+            );
+          }
+          continue;
+        }
         await tx.insert(schema.txInExpanded).values({
           txId, txHash: p.hash,
           previousOutTxHash: prev.t_hash, previousOutTxN: prev.n,
