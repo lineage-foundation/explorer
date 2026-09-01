@@ -63,13 +63,14 @@ describe("LineageNodeClient", () => {
     expect(result).toEqual([["h1", { inputs: [], outputs: [], version: 0, druid_info: null }]]);
   });
 
-  it("tolerates a failing batch by returning no entries for it", async () => {
+  it("rejects the whole call when any batch fails, so partial tx data is never returned", async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(jsonResponse([{ key: "h1", item_meta: {}, data: { inputs: [] } }]))
       .mockRejectedValue(new Error("boom"));
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl, txHttpBatchSize: 1, txHttpConcurrency: 2 });
-    const result = await client.getTransactionsByHash(["h1", "h2"]);
-    expect(result).toEqual([["h1", { inputs: [] }]]);
+    await expect(client.getTransactionsByHash(["h1", "h2"])).rejects.toThrow(
+      /fetchBatch request to http:\/\/node\/v1\/blockchain-entries\/query failed after 3 attempts: boom/,
+    );
   });
 
   it("parses supply from /v1/supply raw text, preserving digits beyond 2^53", async () => {
@@ -135,5 +136,26 @@ describe("LineageNodeClient", () => {
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", mempoolNodeUrl: "http://mempool", fetchImpl });
     expect(await client.getIssuedSupply()).toBe("0");
     expect(await client.getTotalSupply()).toBe("360360000000000000");
+  });
+
+  it("propagates a transaction-batch fetch error instead of silently dropping txs", async () => {
+    // A swallowed batch error would look like "these txs don't exist" to the
+    // ingestor, which would then persist a permanently-incomplete block.
+    const fetchImpl = vi.fn().mockImplementation(
+      () => new Response(JSON.stringify({ title: "Bad Gateway", status: 502 }), { status: 502 }),
+    );
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    await expect(client.getTransactionsByHash(["h1"])).rejects.toThrow(
+      /fetchBatch request to http:\/\/node\/v1\/blockchain-entries\/query failed after 3 attempts: HTTP 502/,
+    );
+  });
+
+  it("still returns only the entries the node includes (omitted keys are not an error)", async () => {
+    const fetchImpl = vi.fn().mockImplementation(
+      () => jsonResponse([{ key: "h1", item_meta: {}, data: { inputs: [], outputs: [], version: 0, druid_info: null } }]),
+    );
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    const result = await client.getTransactionsByHash(["h1", "h2"]);
+    expect(result.map(([k]) => k)).toEqual(["h1"]);
   });
 });

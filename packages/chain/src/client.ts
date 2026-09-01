@@ -130,18 +130,21 @@ export class LineageNodeClient {
     return all;
   }
 
+  // A batch failure propagates (after `fetchWithRetry`'s retries) rather than
+  // being swallowed to `[]`: an empty result is indistinguishable from "the node
+  // has none of these txs", which would let the ingestor persist a permanently
+  // incomplete block. Letting it throw makes the ingest cycle retry instead.
+  // Keys the node genuinely lacks are simply omitted from a successful response,
+  // so a short (but non-throwing) result still means "these specific txs are
+  // absent" — only transport/HTTP failures reject.
   private async fetchBatch(batchHashes: string[]): Promise<[string, LineageTransaction][]> {
-    try {
-      const entries = await this.fetchJson<BlockchainEntry<LineageTransaction>[]>(
-        `${this.config.storageNodeUrl}/v1/blockchain-entries/query`,
-        { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ keys: batchHashes }) },
-        "fetchBatch",
-        30000,
-      );
-      return entries.map((entry) => [entry.key, entry.data]);
-    } catch {
-      return [];
-    }
+    const entries = await this.fetchJson<BlockchainEntry<LineageTransaction>[]>(
+      `${this.config.storageNodeUrl}/v1/blockchain-entries/query`,
+      { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ keys: batchHashes }) },
+      "fetchBatch",
+      30000,
+    );
+    return entries.map((entry) => [entry.key, entry.data]);
   }
 
   getCirculatingSupply(): Promise<string> {

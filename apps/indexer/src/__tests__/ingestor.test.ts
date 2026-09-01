@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { createDb, type Database, schema, getBlocks, getMaxBlockNum } from "@explorer/db";
-import { createIngestor, ContinuityError } from "../ingestor.js";
+import { createIngestor, ContinuityError, MissingTransactionError } from "../ingestor.js";
 import { loadConfig } from "../config.js";
 import { FakeSourceClient, buildBlock, buildTokenTx, buildSpendTx } from "./fake-source.js";
 
@@ -95,4 +95,27 @@ it("halts with ContinuityError on a previous_hash mismatch", async () => {
   const ing = createIngestor({ db: db(), source, config: cfg(), logger: noopLogger });
   await expect(ing.runCycle()).rejects.toBeInstanceOf(ContinuityError);
   expect(await getMaxBlockNum(db())).toBe(0); // block 0 committed, block 1 rejected
+});
+
+it("aborts a block (no partial persist) when a required tx is missing from the source", async () => {
+  const source = new FakeSourceClient(); chainOf(1, source);
+  // block 1 references a tx the source never returns (and which is not skipped)
+  source.addBlock("H1", buildBlock({ num: 1, hash: "H1", previousHash: "H0", miningTxHash: "cbH1", txHashes: ["GONE"] }));
+  const ing = createIngestor({ db: db(), source, config: cfg(), logger: noopLogger });
+  await expect(ing.runCycle()).rejects.toBeInstanceOf(MissingTransactionError);
+  expect(await getMaxBlockNum(db())).toBe(0); // block 0 committed, block 1 not persisted
+});
+
+it("skips an intentionally-skipped tx that the source omits, without aborting", async () => {
+  const source = new FakeSourceClient(); chainOf(0, source);
+  // block 1 references a skipped hash the source omits, plus its normal coinbase.
+  source.addBlock("H1", buildBlock({ num: 1, hash: "H1", previousHash: "H0", miningTxHash: "cbH1", txHashes: ["SKIPME"] }));
+  source.addTx("cbH1", buildTokenTx([{ address: "M", amount: 50 }]));
+  const config = loadConfig({
+    DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", INDEXER_MAX_BLOCK_RANGE: "10",
+    INDEXER_SKIP_TX_HASHES: "SKIPME",
+  });
+  const ing = createIngestor({ db: db(), source, config, logger: noopLogger });
+  await ing.runCycle();
+  expect(await getMaxBlockNum(db())).toBe(1); // block 1 persisted; skipped tx simply not inserted
 });

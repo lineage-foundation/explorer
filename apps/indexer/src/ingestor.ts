@@ -18,6 +18,21 @@ export class ContinuityError extends Error {
   }
 }
 
+/**
+ * A block references a transaction the source returned a successful response
+ * without — i.e. genuinely missing, not a transport failure (those propagate
+ * from the client after its retries). Thrown so the cycle aborts the block and
+ * retries next time rather than persisting it permanently incomplete. Hashes the
+ * operator has listed in `skipTxHashes` are expected to be absent and do not
+ * trigger this.
+ */
+export class MissingTransactionError extends Error {
+  constructor(readonly hash: string, readonly blockNum: number) {
+    super(`Block ${blockNum} references transaction ${hash} that the source did not return`);
+    this.name = "MissingTransactionError";
+  }
+}
+
 export function createIngestor(deps: {
   db: Database; source: SourceClient; config: IndexerConfig; logger: WorkerLogger;
 }): { runCycle: () => Promise<{ caughtUp: boolean; processedTo?: number }> } {
@@ -106,7 +121,18 @@ async function ingestOne(
   const transactions: PreparedTx[] = [];
   for (const hash of order) {
     const tx = fetched.get(hash);
-    if (!tx) { logger.warn({ event: "tx.missing", hash, block: block.header.b_num }, "tx not returned by node"); continue; }
+    if (!tx) {
+      // Operator-skipped hashes are expected to be absent and are never
+      // inserted anyway. Any other missing hash is real data loss: abort the
+      // block (before persisting) so the cycle retries instead of storing it
+      // permanently incomplete.
+      if (skip.has(hash)) continue;
+      logger.warn(
+        { event: "tx.missing", hash, block: block.header.b_num },
+        "required tx not returned by node — aborting block for retry",
+      );
+      throw new MissingTransactionError(hash, block.header.b_num);
+    }
     transactions.push({ hash, tx, coinbase: isCoinbase.get(hash) === true });
   }
   await processBlock(db, { blockHash, block, transactions, skip });
