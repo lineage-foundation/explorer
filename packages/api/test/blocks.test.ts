@@ -51,4 +51,20 @@ describe("blocks routes", () => {
     expect(res.status).toBe(422);
     expect(res.headers.get("content-type")).toContain("application/problem+json");
   });
+
+  it("404s a malformed block id instead of resolving it to a truncated number", async () => {
+    // "1abc" must not be read as block 1 (which exists) — it is not a valid id.
+    const res = await app().request("/api/v1/blocks/1abc");
+    expect(res.status).toBe(404);
+  });
+
+  it("422s an over-long block id (path-param length bound)", async () => {
+    const res = await app().request(`/api/v1/blocks/${"a".repeat(200)}`);
+    expect(res.status).toBe(422);
+  });
+
+  it("422s an offset beyond the deep-offset cap", async () => {
+    const res = await app().request("/api/v1/blocks?offset=100001");
+    expect(res.status).toBe(422);
+  });
 });

@@ -14,6 +14,10 @@ describe("ListQuery", () => {
     expect(ListQuery.safeParse({ limit: "101" }).success).toBe(false);
     expect(ListQuery.safeParse({ order: "sideways" }).success).toBe(false);
   });
+  it("caps offset to bound deep-offset scans", () => {
+    expect(ListQuery.safeParse({ offset: "100000" }).success).toBe(true);
+    expect(ListQuery.safeParse({ offset: "100001" }).success).toBe(false);
+  });
 });
 
 describe("classifyTxType", () => {

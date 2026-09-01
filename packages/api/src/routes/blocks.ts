@@ -7,7 +7,7 @@ import {
 import { CACHE, classifyTxType } from "../helpers.js";
 import { ProblemError } from "../problem.js";
 
-const idParam = z.object({ id: z.string().openapi({ param: { name: "id", in: "path" }, example: "1" }) });
+const idParam = z.object({ id: z.string().min(1).max(128).openapi({ param: { name: "id", in: "path" }, example: "1" }) });
 const problem404 = {
   404: { content: { "application/problem+json": { schema: ProblemSchema } }, description: "Not found" },
 };

@@ -31,6 +31,17 @@ describe("rate limiting", () => {
     expect(body).toMatchObject({ title: "Too Many Requests", status: 429 });
   });
 
+  it("keys buckets via a custom clientKey, ignoring the spoofable header", async () => {
+    const { db } = createDb(URL);
+    // A fixed key collapses distinct X-Forwarded-For values into one bucket,
+    // proving the deployment can override the default (spoofable) keying.
+    const a = createApiApp({ db, rateLimit: { limit: 1, windowSeconds: 60, clientKey: () => "fixed" } });
+    const first = await a.request("/api/v1/nope", { headers: { "x-forwarded-for": "1.1.1.1" } });
+    expect(first.headers.get("RateLimit-Remaining")).toBe("0");
+    const second = await a.request("/api/v1/nope", { headers: { "x-forwarded-for": "9.9.9.9" } });
+    expect(second.status).toBe(429);
+  });
+
   it("evicts expired buckets so the store stays bounded", () => {
     let clock = 0;
     const store = createMemoryStore(() => clock);

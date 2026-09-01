@@ -38,7 +38,11 @@ export interface TxDetail {
 }
 
 function isHash(value: string): boolean {
-  return Number.isNaN(parseInt(value, 10));
+  // Treat as a block number only when the entire string is digits. `parseInt`
+  // stops at the first non-digit, so "123abc" would otherwise be read as block
+  // 123; require a full match so a malformed id is looked up as a hash (and
+  // 404s) instead of silently resolving to the wrong block.
+  return !/^\d+$/.test(value);
 }
 
 export async function getBlocksCount(db: Database): Promise<number> {

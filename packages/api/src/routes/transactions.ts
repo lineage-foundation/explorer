@@ -36,7 +36,7 @@ export function serializeTransaction(t: TxDetail) {
 }
 
 const hashParam = z.object({
-  hash: z.string().openapi({ param: { name: "hash", in: "path" }, example: "tx_2" }),
+  hash: z.string().min(1).max(128).openapi({ param: { name: "hash", in: "path" }, example: "tx_2" }),
 });
 
 export function registerTransactions(app: OpenAPIHono, db: Database): void {

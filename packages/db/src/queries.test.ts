@@ -95,6 +95,12 @@ describe("read queries", () => {
     expect(await getBlockByHashOrNumber(db(), "b_hash_missing")).toBeNull();
   });
 
+  it("does not resolve a malformed id to a truncated block number", async () => {
+    // "1abc" must be treated as a (missing) hash, not parseInt'd to block 1.
+    expect(await getBlockByHashOrNumber(db(), "1abc")).toBeNull();
+    expect(await getBlockByHashOrNumber(db(), "1e2")).toBeNull();
+  });
+
   it("returns a block's transactions with first-output type", async () => {
     const res = await getBlockTransactions(db(), "1");
     expect(res?.transactions).toHaveLength(1);

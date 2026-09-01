@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { problemJson } from "./problem.js";
 
 export interface RateLimitStore {
@@ -45,19 +45,30 @@ export interface RateLimitOptions {
   limit?: number;
   windowSeconds?: number;
   store?: RateLimitStore;
+  /**
+   * Derive the per-client bucket key. The correct trusted client-IP source is
+   * deployment-specific (which proxy hop to trust, or a platform-provided
+   * verified IP), so a deployment behind a known proxy should inject this rather
+   * than rely on the spoofable default below.
+   */
+  clientKey?: (c: Context) => string;
+}
+
+// Default key: the leftmost X-Forwarded-For hop. This is the value the *client*
+// supplied, so it is spoofable unless an upstream proxy overwrites it — a SOFT
+// abuse limit only. Override via `clientKey` for a real trusted-IP source.
+function defaultClientKey(c: Context): string {
+  const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded && forwarded.length > 0 ? forwarded : "unknown";
 }
 
 export function rateLimit(opts: RateLimitOptions = {}): MiddlewareHandler {
   const limit = opts.limit ?? 120;
   const windowSeconds = opts.windowSeconds ?? 60;
   const store = opts.store ?? createMemoryStore();
+  const clientKey = opts.clientKey ?? defaultClientKey;
   return async (c, next) => {
-    // SOFT abuse limit only: keyed on the leftmost X-Forwarded-For hop, which is
-    // trusted only as much as the upstream proxy. Precise trusted-proxy IP
-    // derivation is deploy-specific and out of scope here.
-    const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-    const key = forwarded && forwarded.length > 0 ? forwarded : "unknown";
-    const result = store.take(key, limit, windowSeconds);
+    const result = store.take(clientKey(c), limit, windowSeconds);
     c.header("RateLimit-Limit", String(limit));
     c.header("RateLimit-Remaining", String(result.remaining));
     c.header("RateLimit-Reset", String(result.resetSeconds));

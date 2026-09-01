@@ -7,7 +7,7 @@ import { CACHE } from "../helpers.js";
 import { serializeTransaction } from "./transactions.js";
 
 const addressParam = z.object({
-  address: z.string().openapi({ param: { name: "address", in: "path" }, example: "addr_1" }),
+  address: z.string().min(1).max(128).openapi({ param: { name: "address", in: "path" }, example: "addr_1" }),
 });
 
 export function registerAddresses(app: OpenAPIHono, db: Database): void {
