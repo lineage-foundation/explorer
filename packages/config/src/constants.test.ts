@@ -12,4 +12,29 @@ describe("brand constants", () => {
     expect(typeof totalSupply).toBe("bigint");
     expect(coinFraction).toBeGreaterThan(0n);
   });
+
+  it("falls back to the default coin fraction when the env var is blank", () => {
+    withEnv("TOKEN_COIN_FRACTION", "", () => {
+      expect(getSupplyConstants().coinFraction).toBe(72072000n);
+    });
+  });
+
+  it("throws loudly on a zero, negative, or non-integer coin fraction", () => {
+    for (const bad of ["0", "-5", "abc"]) {
+      withEnv("TOKEN_COIN_FRACTION", bad, () => {
+        expect(() => getSupplyConstants()).toThrow(/TOKEN_COIN_FRACTION/);
+      });
+    }
+  });
 });
+
+function withEnv(key: string, value: string, fn: () => void): void {
+  const prev = process.env[key];
+  process.env[key] = value;
+  try {
+    fn();
+  } finally {
+    if (prev === undefined) delete process.env[key];
+    else process.env[key] = prev;
+  }
+}

@@ -15,6 +15,13 @@ describe("formatLngx", () => {
     // long fractional value rounded to 2dp
     expect(formatLngx("100000000", 2)).toBe("1.39");
   });
+  it("bounds a non-terminating amount to a sane default precision", () => {
+    // 100000000 / 72072000 = 1.38750138750... -> capped at 8dp, not 20
+    expect(formatLngx("100000000")).toBe("1.38750139");
+    expect(formatLngxPlain("100000000")).toBe("1.38750139");
+    // exact multiples keep no spurious decimals
+    expect(formatLngx("72072000")).toBe("1");
+  });
 });
 
 describe("formatLngxPlain", () => {
