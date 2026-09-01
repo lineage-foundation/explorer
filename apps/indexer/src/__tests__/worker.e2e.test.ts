@@ -53,4 +53,42 @@ describe("worker end-to-end", () => {
     expect(bTxs.transactions.some((t) => t.hash === "t1")).toBe(true);
     expect((await getTransactionByHash(handle.db, "t1"))?.outs[0]?.amount).toBe("30");
   });
+
+  it("marks itself stalled after repeated cycle failures and recovers on success", async () => {
+    const base = new FakeSourceClient();
+    base.addBlock("H0", buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: [] }));
+    base.addTx("cb0", buildTokenTx([{ address: "M", amount: 1 }]));
+    let fail = true;
+    const source = {
+      getLatestBlock: () => (fail ? Promise.reject(new Error("node down")) : base.getLatestBlock()),
+      getBlockRange: (s: number, e: number) => base.getBlockRange(s, e),
+      getTransactionsByHash: (h: string[]) => base.getTransactionsByHash(h),
+      getCirculatingSupply: () => base.getCirculatingSupply(),
+    };
+    const config = loadConfig({
+      DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", HEALTH_PORT: "",
+      INDEXER_POLL_INTERVAL_MS: "5", INDEXER_HEALTH_MAX_CONSECUTIVE_FAILURES: "3",
+    });
+    const worker = createWorker({ config, db: handle.db, sql: handle.sql, source, logger: noopLogger });
+    await worker.start();
+    try {
+      // repeated failures past the threshold surface as `stalled` (→ /health 503)
+      await waitFor(() => worker.getStatus().stalled !== null);
+      expect(worker.getStatus().stalled).toMatch(/consecutive cycle failures: node down/);
+      // node recovers → the next successful cycle clears the stalled flag (self-heal)
+      fail = false;
+      await waitFor(() => worker.getStatus().stalled === null);
+      expect(worker.getStatus().stalled).toBeNull();
+    } finally {
+      await worker.stop();
+    }
+  });
 });
+
+async function waitFor(cond: () => boolean, timeoutMs = 3000): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error("waitFor timed out");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}

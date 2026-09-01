@@ -13,7 +13,12 @@ export function createWorker(deps: {
   sql: ReturnType<typeof postgres>;
   source: SourceClient;
   logger: WorkerLogger;
-}): { start: () => Promise<void>; stop: () => Promise<void>; runCycleOnce: () => Promise<void> } {
+}): {
+  start: () => Promise<void>;
+  stop: () => Promise<void>;
+  runCycleOnce: () => Promise<void>;
+  getStatus: () => Status;
+} {
   const { config, db, sql, source, logger } = deps;
   const ingestor = createIngestor({ db, source, config, logger });
   const supplyCron = createSupplyCron({ db, source, logger });
@@ -29,9 +34,15 @@ export function createWorker(deps: {
     lockHeld: false,
     lastSupplyUpdate: null,
     halted: null,
+    stalled: null,
   };
 
   async function loop(): Promise<void> {
+    // A run of consecutive failures (node/DB outage, a deterministic poison-pill
+    // block) is retried indefinitely so a transient fault self-heals — but once
+    // it crosses the threshold we surface it via /health (503) so a liveness
+    // probe can act, rather than silently retrying forever behind a green check.
+    let consecutiveFailures = 0;
     while (running) {
       try {
         const tip = (await source.getLatestBlock()).header.b_num;
@@ -41,6 +52,8 @@ export function createWorker(deps: {
           status.lastIndexedBlock = result.processedTo;
           status.lag = tip - result.processedTo;
         }
+        consecutiveFailures = 0;
+        status.stalled = null;
         if (result.caughtUp) await sleep(config.pollIntervalMs);
       } catch (err) {
         if (err instanceof ContinuityError) {
@@ -48,13 +61,22 @@ export function createWorker(deps: {
           logger.error({ event: "halted", err: err.message }, "ingestion halted");
           return; // stop the loop; health flips to 503
         }
-        logger.error({ event: "cycle.error", err: String(err) }, "ingest cycle failed; retrying");
+        consecutiveFailures += 1;
+        const message = err instanceof Error ? err.message : String(err);
+        if (consecutiveFailures >= config.healthMaxConsecutiveFailures) {
+          status.stalled = `${consecutiveFailures} consecutive cycle failures: ${message}`;
+        }
+        logger.error(
+          { event: "cycle.error", err: message, consecutiveFailures },
+          "ingest cycle failed; retrying",
+        );
         await sleep(config.pollIntervalMs);
       }
     }
   }
 
   return {
+    getStatus: () => status,
     async runCycleOnce() {
       await ingestor.runCycle();
     },

@@ -12,6 +12,7 @@ export interface IndexerConfig {
   skipTxHashes: string[];
   lockOnBusy: "exit" | "wait";
   healthPort: number | null;
+  healthMaxConsecutiveFailures: number;
   logLevel: string;
 }
 
@@ -50,6 +51,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): IndexerConfig {
       .split(",").map((s) => s.trim()).filter(Boolean),
     lockOnBusy,
     healthPort: healthPortRaw === "" ? null : num(env, "HEALTH_PORT", 8080),
+    healthMaxConsecutiveFailures: num(env, "INDEXER_HEALTH_MAX_CONSECUTIVE_FAILURES", 10),
     logLevel: env.LOG_LEVEL ?? "info",
   };
 }

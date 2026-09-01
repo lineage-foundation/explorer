@@ -87,20 +87,25 @@ export function createIngestor(deps: {
 /**
  * Whether the source chain has diverged from our indexed data — i.e. our stored
  * tip is no longer part of the source's chain. Because a block's hash commits to
- * its entire ancestry, a matching hash at the stored tip means every ancestor
- * matches too, so this single comparison detects any reset or reorg within our
- * range. Returns true ONLY on positive evidence (source shorter than our tip, or
- * a confirmed differing hash) — an inconclusive/absent response never triggers a
- * wipe, so a transient node blip cannot destroy indexed data.
+ * its entire ancestry, comparing the hash at a single shared height detects any
+ * reset or reorg within our range.
+ *
+ * We probe the lower of the two tips: when the source reports a tip *below* ours
+ * (a node restarting, or a failover to a lagging replica), a merely-behind node
+ * still shares our history — its block at its own tip has the SAME hash we
+ * already indexed, so this returns false and we wait rather than wiping. Only a
+ * genuinely different hash at that height is divergence. An inconclusive/absent
+ * response never triggers a wipe, so a transient node blip cannot destroy
+ * indexed data.
  */
 async function sourceDiverged(
   db: Database, source: SourceClient, storedMax: number, latest: number,
 ): Promise<boolean> {
-  if (latest < storedMax) return true;
-  const [entry] = await source.getBlockRange(storedMax, storedMax);
+  const probeNum = Math.min(latest, storedMax);
+  const [entry] = await source.getBlockRange(probeNum, probeNum);
   const sourceHash = entry?.[0];
   if (sourceHash === undefined) return false; // inconclusive — do not wipe
-  const storedHash = await getBlockHashByNum(db, storedMax);
+  const storedHash = await getBlockHashByNum(db, probeNum);
   return sourceHash !== storedHash;
 }
 

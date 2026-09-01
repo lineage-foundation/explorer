@@ -3,7 +3,11 @@ import type { AddressInfo } from "node:net";
 
 export interface Status {
   lastIndexedBlock: number | null; chainTip: number | null; lag: number | null;
-  lockHeld: boolean; lastSupplyUpdate: string | null; halted: string | null;
+  lockHeld: boolean; lastSupplyUpdate: string | null;
+  // `halted` = permanently stopped (continuity break). `stalled` = repeatedly
+  // failing but still retrying (e.g. node/DB outage past the failure threshold).
+  // Either makes /health report 503 so an orchestrator can act.
+  halted: string | null; stalled: string | null;
 }
 
 export function createHealthServer(opts: { port: number; getStatus: () => Status }): {
@@ -16,9 +20,10 @@ export function createHealthServer(opts: { port: number; getStatus: () => Status
         server = createServer((req, res) => {
           const status = opts.getStatus();
           if (req.url === "/health") {
-            const ok = status.halted === null;
+            const ok = status.halted === null && status.stalled === null;
+            const label = status.halted !== null ? "halted" : status.stalled !== null ? "stalled" : "ok";
             res.writeHead(ok ? 200 : 503, { "content-type": "application/json" });
-            res.end(JSON.stringify({ status: ok ? "ok" : "halted" }));
+            res.end(JSON.stringify({ status: label }));
             return;
           }
           if (req.url === "/status") {

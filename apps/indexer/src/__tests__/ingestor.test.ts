@@ -71,6 +71,20 @@ it("resyncs when the source reorgs to a same-height chain with different hashes"
   expect(blocks.map((b) => b.hash)).toEqual(["F0", "F1", "F2", "F3"]);
 });
 
+it("does not wipe when the source merely lags behind (lower tip, same history)", async () => {
+  const source = new FakeSourceClient(); chainOf(5, source);
+  await createIngestor({ db: db(), source, config: cfg(), logger: noopLogger }).runCycle();
+  expect(await getMaxBlockNum(db())).toBe(5);
+
+  // Node restart / failover to a lagging replica: it reports tip 3, but its
+  // block 3 is the SAME block we already indexed (same chain, just behind) — a
+  // transient lag, NOT a reset. Must not trigger a destructive wipe.
+  const lagging = new FakeSourceClient(); chainOf(3, lagging); // same default "H" prefix → matching hashes
+  const res = await createIngestor({ db: db(), source: lagging, config: cfg(), logger: noopLogger }).runCycle();
+  expect(res.caughtUp).toBe(true);
+  expect(await getMaxBlockNum(db())).toBe(5); // untouched — no wipe
+});
+
 it("does not wipe indexed data when the tip probe is momentarily inconclusive", async () => {
   const source = new FakeSourceClient(); chainOf(3, source);
   await createIngestor({ db: db(), source, config: cfg(), logger: noopLogger }).runCycle();
