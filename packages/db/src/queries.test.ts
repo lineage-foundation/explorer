@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq, inArray } from "drizzle-orm";
 import { createDb, type Database } from "./client.js";
 import {
   block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
@@ -174,6 +175,52 @@ describe("read queries", () => {
     const res = await getAccountTransactions(db(), "addr_1", { limit: 1, offset: 0 });
     expect(res.transactions).toHaveLength(1);
     expect(res.pagination.hasMore).toBe(false);
+  });
+
+  it("includes coinbase (block-reward) transactions in an address's history", async () => {
+    // tx_cb pays "miner" via a coinbase output; coinbase txs have no tx_in rows,
+    // so an inner join on tx_in would silently hide every mining reward.
+    const res = await getAccountTransactions(db(), "miner", { limit: 25, offset: 0 });
+    expect(res.transactions.map((t) => t.hash)).toEqual(["tx_cb"]);
+    expect(res.pagination.total).toBe(1);
+  });
+
+  it("paginates equal-block-number transactions deterministically (unique tiebreaker)", async () => {
+    // Three non-coinbase txs in ONE block all pay the same address, so every row
+    // shares b.num — without a unique ORDER BY tiebreaker their relative order is
+    // unspecified and offset pagination can drop/duplicate rows across pages.
+    await db().insert(block).values({
+      version: 1, num: 900, hash: "tie_blk",
+      timestamp: new Date("2024-06-01T00:00:00Z"), nbTx: 3,
+    });
+    await db().insert(transaction).values([
+      { hash: "tie_a", blockHash: "tie_blk", version: 1, coinbase: false },
+      { hash: "tie_b", blockHash: "tie_blk", version: 1, coinbase: false },
+      { hash: "tie_c", blockHash: "tie_blk", version: 1, coinbase: false },
+    ]); // serial ids assigned in array order: tie_a < tie_b < tie_c
+    await db().insert(txOut).values([
+      { txId: 0, txHash: "tie_a", valueType: "token", amount: "1", locktime: "0", scriptPublicKey: "tie_addr", n: 0 },
+      { txId: 0, txHash: "tie_b", valueType: "token", amount: "1", locktime: "0", scriptPublicKey: "tie_addr", n: 0 },
+      { txId: 0, txHash: "tie_c", valueType: "token", amount: "1", locktime: "0", scriptPublicKey: "tie_addr", n: 0 },
+    ]);
+    try {
+      const p1 = await getAccountTransactions(db(), "tie_addr", { limit: 2, offset: 0 });
+      const p2 = await getAccountTransactions(db(), "tie_addr", { limit: 2, offset: 2 });
+      expect(p1.pagination.total).toBe(3);
+      // deterministic: within equal b.num, order falls back to transaction.id desc
+      expect(p1.transactions.map((t) => t.hash)).toEqual(["tie_c", "tie_b"]);
+      expect(p2.transactions.map((t) => t.hash)).toEqual(["tie_a"]);
+      // complete coverage across pages — no dropped or duplicated rows
+      const seen = [...p1.transactions, ...p2.transactions].map((t) => t.hash);
+      expect(new Set(seen)).toEqual(new Set(["tie_a", "tie_b", "tie_c"]));
+      // the global transaction list applies the same tiebreaker (highest block first)
+      const list = await getTransactions(db(), { limit: 3, offset: 0, order: "desc" });
+      expect(list.transactions.map((t) => t.hash)).toEqual(["tie_c", "tie_b", "tie_a"]);
+    } finally {
+      await db().delete(txOut).where(inArray(txOut.txHash, ["tie_a", "tie_b", "tie_c"]));
+      await db().delete(transaction).where(inArray(transaction.hash, ["tie_a", "tie_b", "tie_c"]));
+      await db().delete(block).where(eq(block.hash, "tie_blk"));
+    }
   });
 
   it("prefix-searches blocks, transactions, and addresses (escaping LIKE metachars)", async () => {

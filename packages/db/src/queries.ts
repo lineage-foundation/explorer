@@ -185,7 +185,9 @@ export async function getTransactions(
     .from(transaction)
     .innerJoin(block, eq(block.hash, transaction.blockHash))
     .where(eq(transaction.coinbase, false))
-    .orderBy(direction(block.num))
+    // transaction.id breaks ties between rows sharing a block number, so
+    // offset pagination stays stable (block.num alone is not unique per tx).
+    .orderBy(direction(block.num), direction(transaction.id))
     .limit(limit)
     .offset(offset);
   const hashes = rows.map((r) => r.hash);
@@ -244,24 +246,32 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
   const expandedByKey = new Map(
     expanded.map((e) => [`${e.txHash}:${e.previousOutTxHash}:${e.previousOutTxN}`, e]),
   );
-  return txs.map((t) => ({
-    blockHash: t.blockHash, hash: t.hash, version: t.version, coinbase: t.coinbase, timestamp: t.timestamp,
-    fees: t.fees, druidInfo: t.druidInfo,
-    ins: (insByHash.get(t.hash) ?? []).map((i: TxIn) => {
-      const resolved = expandedByKey.get(`${t.hash}:${i.previousOutTxHash}:${i.previousOutTxN}`);
-      return {
-        scriptSignature: i.scriptSignature,
-        previousOutTxHash: i.previousOutTxHash, previousOutTxN: i.previousOutTxN,
-        fromAddress: resolved?.fromAddress ?? null,
-        amount: resolved?.amount ?? null,
-      };
-    }),
-    outs: (outsByHash.get(t.hash) ?? []).map((o: TxOut) => ({
-      valueType: o.valueType, amount: o.amount, locktime: o.locktime,
-      genesisHash: o.genesisHash, scriptPublicKey: o.scriptPublicKey,
-      itemMetadata: o.itemMetadata, n: o.n,
-    })),
-  }));
+  const detailByHash = new Map<string, TxDetail>(
+    txs.map((t) => [t.hash, {
+      blockHash: t.blockHash, hash: t.hash, version: t.version, coinbase: t.coinbase, timestamp: t.timestamp,
+      fees: t.fees, druidInfo: t.druidInfo,
+      ins: (insByHash.get(t.hash) ?? []).map((i: TxIn) => {
+        const resolved = expandedByKey.get(`${t.hash}:${i.previousOutTxHash}:${i.previousOutTxN}`);
+        return {
+          scriptSignature: i.scriptSignature,
+          previousOutTxHash: i.previousOutTxHash, previousOutTxN: i.previousOutTxN,
+          fromAddress: resolved?.fromAddress ?? null,
+          amount: resolved?.amount ?? null,
+        };
+      }),
+      outs: (outsByHash.get(t.hash) ?? []).map((o: TxOut) => ({
+        valueType: o.valueType, amount: o.amount, locktime: o.locktime,
+        genesisHash: o.genesisHash, scriptPublicKey: o.scriptPublicKey,
+        itemMetadata: o.itemMetadata, n: o.n,
+      })),
+    }]),
+  );
+  // Preserve the caller's hash order — callers pass an already-paginated,
+  // deterministically-ordered hash list and expect the details back in that order.
+  return hashes.flatMap((h) => {
+    const detail = detailByHash.get(h);
+    return detail ? [detail] : [];
+  });
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
@@ -304,12 +314,15 @@ export async function getAccountTransactions(
 ): Promise<{ transactions: TxDetail[]; pagination: Pagination }> {
   const limit = opts.limit ?? 25;
   const offset = opts.offset ?? 0;
+  // Match transactions that pay this address via any output. The tx_out join
+  // alone is sufficient; a tx_in join would additionally require the tx to have
+  // inputs, silently excluding coinbase (mining-reward) transactions, which have
+  // none.
   const totalRows = await db.execute<{ total: number }>(sql`
     select count(*)::int as total from (
       select distinct t.hash, b.num
       from ${transaction} t
       inner join ${block} b on b.hash = t."blockHash"
-      inner join ${txIn} tin on t.hash = tin."txHash"
       inner join ${txOut} tout on t.hash = tout."txHash"
       where tout."scriptPublicKey" = ${address}
     ) temp
@@ -318,14 +331,16 @@ export async function getAccountTransactions(
   if (!total) {
     return { transactions: [], pagination: { total: 0, limit, offset, hasMore: false } };
   }
+  // t.id is a unique tiebreaker so paging over rows sharing a block number is
+  // stable; it must appear in the select list to be usable by SELECT DISTINCT's
+  // ORDER BY.
   const hashRows = await db.execute<{ hash: string }>(sql`
-    select distinct t.hash, b.num
+    select distinct t.id, t.hash, b.num
     from ${transaction} t
     inner join ${block} b on b.hash = t."blockHash"
-    inner join ${txIn} tin on t.hash = tin."txHash"
     inner join ${txOut} tout on t.hash = tout."txHash"
     where tout."scriptPublicKey" = ${address}
-    order by b.num desc
+    order by b.num desc, t.id desc
     limit ${limit} offset ${offset}
   `);
   const details = await loadTxDetails(db, hashRows.map((r) => r.hash));

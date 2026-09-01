@@ -73,6 +73,9 @@ export const txIn = pgTable(
       foreignColumns: [transaction.hash],
       name: "FK_tx_in_tx_hash_transaction_hash",
     }),
+    // Postgres does not auto-index FK columns; every tx-detail / account-history
+    // lookup filters tx_in by txHash, so without this it seq-scans the table.
+    txHashIdx: index("IX_tx_in_txHash").on(t.txHash),
   }),
 );
 
@@ -123,6 +126,8 @@ export const txInExpanded = pgTable(
       foreignColumns: [transaction.hash],
       name: "FK_0b1efa4b5ea4aa057d0f20e38e2",
     }),
+    // Same rationale as tx_in: loadTxDetails filters tx_in_expanded by txHash.
+    txHashIdx: index("IX_tx_in_expanded_txHash").on(t.txHash),
   }),
 );
 

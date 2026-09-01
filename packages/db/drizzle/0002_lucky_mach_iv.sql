@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS "IX_tx_in_txHash" ON "tx_in" USING btree ("txHash");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "IX_tx_in_expanded_txHash" ON "tx_in_expanded" USING btree ("txHash");
