@@ -9,7 +9,7 @@ import {
   getTransactions, getTransactionsCount, getTransactionByHash,
   getAccountBalance, getAccountTransactions, getCirculatingSupply,
   getMaxBlockNum, getBlockHashByNum, getLatestCoinsHistoryOutIds, searchByPrefix,
-  getBlockCoinbaseInfo,
+  getBlockCoinbaseInfo, searchItems,
 } from "./queries.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
@@ -257,5 +257,62 @@ describe("read queries", () => {
       { address: "tie", date: d, outIds: [22] },
     ]);
     expect(await getLatestCoinsHistoryOutIds(db(), "tie")).toEqual([22]);
+  });
+
+  it("searches item outputs by metadata substring, genesis class, and spent status", async () => {
+    await db().insert(block).values({
+      version: 1, num: 800, hash: "ib", timestamp: new Date("2024-07-01T00:00:00Z"), nbTx: 6,
+    });
+    await db().insert(transaction).values(
+      ["im1", "im2", "im3", "im4", "im5", "spend1"].map((hash) => ({ hash, blockHash: "ib", version: 1, coinbase: false })),
+    );
+    const item = (txHash: string, genesisHash: string, itemMetadata: string, address: string) => ({
+      txId: 0, txHash, valueType: "item", amount: "1", locktime: "0", genesisHash,
+      scriptPublicKey: address, itemMetadata, n: 0,
+    });
+    await db().insert(txOut).values([
+      item("im1", "gen_A", '{"name":"Sword","power":9}', "owner1"), // spent below
+      item("im2", "gen_B", "a rare dragon egg", "owner2"),
+      item("im3", "gen_A", "Sword shard", "owner3"),
+      item("im4", "gen_C", "buy 50% now", "owner4"),
+      item("im5", "gen_C", "buy 5000 now", "owner5"),
+    ]);
+    await db().insert(txIn).values({ txId: 0, txHash: "spend1", previousOutTxHash: "im1", previousOutTxN: 0, scriptSignature: {} });
+    try {
+      // case-insensitive substring, ordered newest block then id desc (im3 after im1)
+      const bySword = await searchItems(db(), { q: "sword", limit: 25, offset: 0 });
+      expect(bySword.items.map((i) => i.txHash)).toEqual(["im3", "im1"]);
+      expect(bySword.items.every((i) => i.genesisHash === "gen_A")).toBe(true);
+      // spent status: im1 has been spent, im3 has not
+      expect(bySword.items.find((i) => i.txHash === "im1")?.spent).toBe(true);
+      expect(bySword.items.find((i) => i.txHash === "im3")?.spent).toBe(false);
+      expect(bySword.items.find((i) => i.txHash === "im3")?.address).toBe("owner3");
+
+      // exact genesis class filter
+      const genB = await searchItems(db(), { genesis: "gen_B" });
+      expect(genB.items.map((i) => i.txHash)).toEqual(["im2"]);
+      expect(genB.items[0]?.metadata).toBe("a rare dragon egg");
+
+      // combined, case-insensitive
+      expect((await searchItems(db(), { q: "DRAGON", genesis: "gen_B" })).items).toHaveLength(1);
+      expect((await searchItems(db(), { q: "sword", genesis: "gen_A" })).items).toHaveLength(2);
+
+      // LIKE metacharacters in q are escaped: "50%" matches the literal, not a wildcard
+      const pct = await searchItems(db(), { q: "50%" });
+      expect(pct.items.map((i) => i.txHash)).toEqual(["im4"]);
+
+      // no match
+      expect((await searchItems(db(), { q: "zzz-nomatch" })).pagination.total).toBe(0);
+
+      // pagination + tiebreaker
+      const page1 = await searchItems(db(), { q: "sword", limit: 1, offset: 0 });
+      expect(page1.items.map((i) => i.txHash)).toEqual(["im3"]);
+      expect(page1.pagination).toMatchObject({ total: 2, limit: 1, offset: 0, hasMore: true });
+    } finally {
+      await db().delete(txIn).where(eq(txIn.txHash, "spend1"));
+      await db().delete(txOut).where(inArray(txOut.txHash, ["im1", "im2", "im3", "im4", "im5"]));
+      await db().delete(transaction).where(inArray(transaction.hash, ["im1", "im2", "im3", "im4", "im5", "spend1"]));
+      await db().delete(block).where(eq(block.hash, "ib"));
+    }
   });
 });

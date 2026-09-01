@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, like, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, like, sql } from "drizzle-orm";
 import BigNumber from "bignumber.js";
 import type { Database } from "./client.js";
 import {
@@ -402,6 +402,63 @@ export async function searchByPrefix(db: Database, prefix: string, limit: number
 export async function getBlockHashByNum(db: Database, num: number): Promise<string | null> {
   const [row] = await db.select({ hash: block.hash }).from(block).where(eq(block.num, num)).limit(1);
   return row?.hash ?? null;
+}
+
+export interface ItemOutput {
+  genesisHash: string | null;
+  metadata: string | null;
+  address: string | null;
+  amount: string | null;
+  spent: boolean;
+  txHash: string;
+  n: number;
+  blockNum: number;
+  blockHash: string;
+  timestamp: Date | null;
+}
+
+/**
+ * Search item outputs (tx_out rows with valueType 'item') by a case-insensitive
+ * metadata substring and/or an exact genesis hash (item class). `spent` reports
+ * whether the output has since been spent (false ⇒ a current holder). Ordered
+ * newest-first with a unique tiebreaker for stable pagination. Amounts stay
+ * strings. `q` is escaped for LIKE metacharacters.
+ */
+export async function searchItems(
+  db: Database,
+  opts: { q?: string; genesis?: string; limit?: number; offset?: number },
+): Promise<{ items: ItemOutput[]; pagination: Pagination }> {
+  const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+  const offset = Math.max(opts.offset ?? 0, 0);
+
+  const filters = [eq(txOut.valueType, "item")];
+  if (opts.genesis) filters.push(eq(txOut.genesisHash, opts.genesis));
+  if (opts.q) filters.push(ilike(txOut.itemMetadata, `%${escapeLike(opts.q)}%`));
+  const where = and(...filters);
+
+  const [totalRow] = await db.select({ value: count() }).from(txOut).where(where);
+  const total = totalRow?.value ?? 0;
+  if (total === 0) return { items: [], pagination: { total: 0, limit, offset, hasMore: false } };
+
+  const spent = sql<boolean>`exists (
+    select 1 from ${txIn} ti
+    where ti."previousOutTxHash" = ${txOut.txHash} and ti."previousOutTxN" = ${txOut.n}
+  )`;
+  const rows = await db
+    .select({
+      genesisHash: txOut.genesisHash, metadata: txOut.itemMetadata, address: txOut.scriptPublicKey,
+      amount: txOut.amount, txHash: txOut.txHash, n: txOut.n,
+      blockNum: block.num, blockHash: block.hash, timestamp: block.timestamp, spent,
+    })
+    .from(txOut)
+    .innerJoin(transaction, eq(transaction.hash, txOut.txHash))
+    .innerJoin(block, eq(block.hash, transaction.blockHash))
+    .where(where)
+    .orderBy(desc(block.num), desc(txOut.id))
+    .limit(limit)
+    .offset(offset);
+
+  return { items: rows, pagination: { total, limit, offset, hasMore: offset + limit < total } };
 }
 
 /**

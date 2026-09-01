@@ -16,6 +16,15 @@ export const ListQuery = PageQuery.extend({
   order: z.enum(["asc", "desc"]).default("desc"),
 });
 
+// `q` (metadata substring) and `genesis` (item class) are both optional here so
+// OpenAPI documents them as optional query params; the route enforces that at
+// least one is supplied (a cross-field rule kept out of the schema so the query
+// stays a plain object for param generation).
+export const ItemQuery = PageQuery.extend({
+  q: z.string().min(1).max(128).optional().openapi({ param: { name: "q", in: "query" }, example: "sword" }),
+  genesis: z.string().min(1).max(128).optional().openapi({ param: { name: "genesis", in: "query" }, example: "g7f3c2a8" }),
+});
+
 export const ProblemSchema = z
   .object({
     type: z.string().openapi({ example: "about:blank" }),
@@ -112,6 +121,22 @@ export const AddressSchema = z
     balanceLngx: z.string(),
   })
   .openapi("Address");
+
+export const ItemOutputSchema = z
+  .object({
+    genesisHash: z.string().nullable(),
+    metadata: z.string().nullable(),
+    address: z.string().nullable(),
+    amount: z.string().nullable(),
+    amountLngx: z.string().nullable(),
+    spent: z.boolean(),
+    txHash: z.string(),
+    n: z.number().int(),
+    blockNum: z.number().int(),
+    blockHash: z.string(),
+    timestamp: z.string().datetime().nullable(),
+  })
+  .openapi("ItemOutput");
 
 export const SupplySchema = z
   .object({

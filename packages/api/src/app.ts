@@ -6,6 +6,7 @@ import { rateLimit, type RateLimitOptions } from "./rate-limit.js";
 import { registerBlocks } from "./routes/blocks.js";
 import { registerTransactions } from "./routes/transactions.js";
 import { registerAddresses } from "./routes/addresses.js";
+import { registerItems } from "./routes/items.js";
 import { registerMeta } from "./routes/meta.js";
 
 export interface ApiDeps {
@@ -41,6 +42,7 @@ export function createApiApp({ db, rateLimit: rl }: ApiDeps): OpenAPIHono {
   registerBlocks(app, db);
   registerTransactions(app, db);
   registerAddresses(app, db);
+  registerItems(app, db);
   registerMeta(app, db);
 
   return app;

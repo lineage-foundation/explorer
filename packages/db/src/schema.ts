@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable, serial, integer, varchar, timestamp, jsonb, boolean, numeric, bigint,
   uniqueIndex, index, foreignKey,
@@ -76,6 +77,8 @@ export const txIn = pgTable(
     // Postgres does not auto-index FK columns; every tx-detail / account-history
     // lookup filters tx_in by txHash, so without this it seq-scans the table.
     txHashIdx: index("IX_tx_in_txHash").on(t.txHash),
+    // Supports the spent-output EXISTS check (does any input spend this output?).
+    prevOutIdx: index("IX_tx_in_prevout").on(t.previousOutTxHash, t.previousOutTxN),
   }),
 );
 
@@ -104,6 +107,11 @@ export const txOut = pgTable(
     txHashNIdx: index("IX_tx_out_txHash_n").on(t.txHash, t.n),
     // Supports LIKE 'prefix%' address search under a non-C collation.
     scriptPubKeyPrefix: index("IX_tx_out_scriptPublicKey_prefix").on(t.scriptPublicKey.op("varchar_pattern_ops")),
+    // Browse items by class (exact genesis hash).
+    genesisIdx: index("IX_tx_out_genesisHash").on(t.genesisHash),
+    // Trigram GIN index for case-insensitive substring search on item metadata
+    // (ILIKE '%q%'). Requires the pg_trgm extension (enabled in migration 0003).
+    itemMetadataTrgm: index("IX_tx_out_itemMetadata_trgm").using("gin", sql`${t.itemMetadata} gin_trgm_ops`),
   }),
 );
 
