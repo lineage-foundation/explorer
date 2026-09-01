@@ -11,7 +11,11 @@ import {
   absoluteTime, relativeTime, truncateHash, txTypeLabel, formatLngx, confirmations,
 } from "../../../lib/format.js";
 
-export const revalidate = 3600;
+// Short ISR window: this page (keyed only on params) is cached, but it renders
+// tip-relative fields — confirmation count and the "next block" link — that go
+// stale as the chain grows. 20s bounds that staleness without re-rendering the
+// immutable block data on every request.
+export const revalidate = 20;
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (

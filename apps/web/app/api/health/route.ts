@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
-import { createDb, getBlocksCount } from "@explorer/db";
+import { getBlocksCount } from "@explorer/db";
+import { getDb } from "../../../lib/db.js";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
+  if (!process.env.DATABASE_URL) {
     return NextResponse.json({ status: "ok", db: "unconfigured" });
   }
-  const { db, close } = createDb(url);
   try {
+    // Reuse the shared connection pool rather than opening and tearing down a
+    // fresh one on every (frequently polled) health check.
+    const { db } = getDb();
     const blocks = await getBlocksCount(db);
     return NextResponse.json({ status: "ok", db: "up", blocks });
   } catch {
     return NextResponse.json({ status: "degraded", db: "down" }, { status: 503 });
-  } finally {
-    await close();
   }
 }

@@ -42,8 +42,14 @@ export function Pagination(
   );
 }
 
+// Cap the page so a public `?page=999999999` can't drive an unbounded SQL
+// OFFSET. With PAGE_SIZE 25 this bounds offset at ~100k rows, matching the API's
+// deep-offset cap.
+const MAX_PAGE = 4000;
+
 export function parsePage(searchParams: { page?: string | string[] }): number {
   const raw = Array.isArray(searchParams.page) ? searchParams.page[0] : searchParams.page;
   const n = Number.parseInt(raw ?? "1", 10);
-  return Number.isFinite(n) && n >= 1 ? n : 1;
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, MAX_PAGE);
 }

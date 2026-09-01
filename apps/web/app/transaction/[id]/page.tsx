@@ -9,7 +9,9 @@ import {
   absoluteTime, relativeTime, truncateHash, txTypeLabel, confirmations,
 } from "../../../lib/format.js";
 
-export const revalidate = 3600;
+// Short ISR window: cached per params, but the confirmation count is
+// tip-relative and goes stale as the chain grows. See block/[id]/page.tsx.
+export const revalidate = 20;
 
 function MetaItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -23,10 +25,10 @@ function MetaItem({ label, children }: { label: string; children: React.ReactNod
 export default async function TransactionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { db } = getDb();
-  const tx = await getTransactionByHash(db, id);
+  // maxNum is independent of the tx, so fetch it in parallel instead of last.
+  const [tx, maxNum] = await Promise.all([getTransactionByHash(db, id), getMaxBlockNum(db)]);
   if (!tx) notFound();
   const block = await getBlockByHashOrNumber(db, tx.blockHash);
-  const maxNum = await getMaxBlockNum(db);
   const coinbase = block?.nonceAndMiningTxHash && Array.isArray(block.nonceAndMiningTxHash)
     ? block.nonceAndMiningTxHash[1] === tx.hash
     : false;
