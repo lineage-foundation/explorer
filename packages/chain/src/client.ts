@@ -28,18 +28,22 @@ export class LineageNodeClient {
   }
 
   /**
-   * Fetch and JSON-parse a `/v1` response, tolerating the transient empty/error
-   * bodies the nodes occasionally return under load. A non-2xx status (with its
-   * `application/problem+json` body), an empty body, or invalid JSON is retried
-   * a few times with a short backoff; if it never resolves we throw a
-   * descriptive error (label + url + status/snippet) rather than a bare
-   * `SyntaxError`, so a failing ingest cycle is diagnosable.
+   * Fetch a `/v1` response and hand its validated body text to `parse`,
+   * tolerating the transient empty/error bodies the nodes occasionally return
+   * under load. A non-2xx status (with its `application/problem+json` body), an
+   * empty body, or a `parse` that throws (e.g. malformed JSON) is retried a few
+   * times with a short backoff; if it never resolves we throw a descriptive
+   * error (label + url + status/snippet) rather than a bare `SyntaxError`, so a
+   * failing cycle is diagnosable. `parse` returning normally ends the retry loop
+   * — so a caller that treats a well-formed-but-incomplete body as a valid
+   * result (not a transient failure) must return, not throw, for that case.
    */
-  private async fetchJson<T>(
+  private async fetchWithRetry<T>(
     url: string,
     init: RequestInit | undefined,
     label: string,
-    timeoutMs?: number,
+    timeoutMs: number | undefined,
+    parse: (text: string) => T,
   ): Promise<T> {
     let lastError = "";
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -53,13 +57,22 @@ export class LineageNodeClient {
         if (text.trim() === "") {
           throw new Error(`empty response body (HTTP ${res.status})`);
         }
-        return JSON.parse(text) as T;
+        return parse(text);
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
         if (attempt < MAX_ATTEMPTS) await delay(RETRY_BACKOFF_MS * attempt);
       }
     }
     throw new Error(`${label} request to ${url} failed after ${MAX_ATTEMPTS} attempts: ${lastError}`);
+  }
+
+  private fetchJson<T>(
+    url: string,
+    init: RequestInit | undefined,
+    label: string,
+    timeoutMs?: number,
+  ): Promise<T> {
+    return this.fetchWithRetry(url, init, label, timeoutMs, (text) => JSON.parse(text) as T);
   }
 
   async getLatestBlock(): Promise<LineageBlock> {
@@ -149,16 +162,17 @@ export class LineageNodeClient {
    * `/v1/supply` returns `total`/`issued` as JSON integers that exceed 2^53, so
    * `JSON.parse` would lose precision. Read the response as raw text and extract
    * the requested field's digit run, then hand the string to BigNumber.
+   *
+   * Network, timeout, non-2xx, and empty-body failures propagate (via
+   * `fetchWithRetry`, after its retries) rather than collapsing to `"0"`: the
+   * supply cron's own error handler then skips the write and preserves the
+   * last-good value. We return `"0"` only when the field is genuinely absent
+   * from a valid, non-empty body.
    */
-  private async fetchSupplyField(url: string, field: "issued" | "total"): Promise<string> {
-    try {
-      const res = await this.fetchImpl(url, { signal: AbortSignal.timeout(15000) });
-      const text = await res.text();
+  private fetchSupplyField(url: string, field: "issued" | "total"): Promise<string> {
+    return this.fetchWithRetry(url, undefined, `getSupply(${field})`, 15000, (text) => {
       const match = text.match(new RegExp(`"${field}"\\s*:\\s*(\\d+)`));
-      if (match?.[1]) return new BigNumber(match[1]).toFixed(0);
-      return "0";
-    } catch {
-      return "0";
-    }
+      return match?.[1] ? new BigNumber(match[1]).toFixed(0) : "0";
+    });
   }
 }

@@ -113,4 +113,27 @@ describe("LineageNodeClient", () => {
     const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
     await expect(client.getBlockRange(1, 1)).rejects.toThrow(/HTTP 404: /);
   });
+
+  it("propagates a supply HTTP error instead of resolving to 0", async () => {
+    // A transient node error must NOT be reported as a legitimate zero supply,
+    // or the supply cron would clobber the last-good value with 0.
+    const fetchImpl = vi.fn().mockImplementation(
+      () => new Response(JSON.stringify({ title: "Bad Gateway", status: 502 }), { status: 502 }),
+    );
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", mempoolNodeUrl: "http://mempool", fetchImpl });
+    await expect(client.getIssuedSupply()).rejects.toThrow(/getSupply\(issued\) request to http:\/\/mempool\/v1\/supply failed after 3 attempts: HTTP 502/);
+  });
+
+  it("propagates a supply network error instead of resolving to 0", async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => Promise.reject(new Error("ECONNREFUSED")));
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", mempoolNodeUrl: "http://mempool", fetchImpl });
+    await expect(client.getTotalSupply()).rejects.toThrow(/getSupply\(total\) request to http:\/\/mempool\/v1\/supply failed after 3 attempts: ECONNREFUSED/);
+  });
+
+  it("returns 0 for supply only when the field is genuinely absent from a valid body", async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => textResponse('{"total":360360000000000000}'));
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", mempoolNodeUrl: "http://mempool", fetchImpl });
+    expect(await client.getIssuedSupply()).toBe("0");
+    expect(await client.getTotalSupply()).toBe("360360000000000000");
+  });
 });
