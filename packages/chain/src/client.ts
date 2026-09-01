@@ -20,6 +20,17 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Token/item output amounts can exceed 2^53, so `JSON.parse` would silently
+// round them (the same >2^53 hazard `/v1/supply` avoids). Quote those integer
+// fields in the raw text before parsing so they survive as exact strings. In
+// valid JSON every quote inside a string value is escaped (`\"`), so this only
+// matches structural `"Token":`/`"amount":` fields, never lookalike text inside
+// a script's bytes; already-quoted values (followed by `"`, not a digit) are
+// left untouched, so it is idempotent.
+function parseEntriesPreservingAmounts(text: string): unknown {
+  return JSON.parse(text.replace(/("(?:Token|amount)"\s*:\s*)(\d+)/g, '$1"$2"'));
+}
+
 export class LineageNodeClient {
   private readonly fetchImpl: typeof fetch;
 
@@ -138,11 +149,12 @@ export class LineageNodeClient {
   // so a short (but non-throwing) result still means "these specific txs are
   // absent" — only transport/HTTP failures reject.
   private async fetchBatch(batchHashes: string[]): Promise<[string, LineageTransaction][]> {
-    const entries = await this.fetchJson<BlockchainEntry<LineageTransaction>[]>(
+    const entries = await this.fetchWithRetry(
       `${this.config.storageNodeUrl}/v1/blockchain-entries/query`,
       { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ keys: batchHashes }) },
       "fetchBatch",
       30000,
+      (text) => parseEntriesPreservingAmounts(text) as BlockchainEntry<LineageTransaction>[],
     );
     return entries.map((entry) => [entry.key, entry.data]);
   }

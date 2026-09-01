@@ -22,7 +22,7 @@ describe("processBlock", () => {
     const cb = buildTokenTx([{ address: "A", amount: 100 }]);
     const t1 = buildTokenTx([{ address: "A", amount: 40 }]);
     const t2 = { version: 1, druid_info: null, inputs: [],
-      outputs: [{ value: { Item: { amount: 1, genesis_hash: "g", metadata: "m" } }, locktime: 0, script_public_key: "A" }] };
+      outputs: [{ value: { Item: { amount: "1", genesis_hash: "g", metadata: "m" } }, locktime: 0, script_public_key: "A" }] };
     await processBlock(db(), {
       blockHash: "H0", block,
       transactions: [

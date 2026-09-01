@@ -15,12 +15,15 @@ export interface LineageTxIn {
 }
 
 export interface LineageAssetToken {
-  Token: number;
+  // Amounts can exceed 2^53; carried as a decimal string to preserve precision
+  // (parsed from raw text by the client, never through a lossy JSON number).
+  Token: string;
 }
 
 export interface LineageAssetItem {
   Item: {
-    amount: number;
+    // Decimal string for the same >2^53 precision reason as LineageAssetToken.
+    amount: string;
     genesis_hash: string;
     metadata: string | null;
   };

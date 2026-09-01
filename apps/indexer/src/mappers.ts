@@ -59,7 +59,7 @@ export function mapOutputRow(
     return {
       ...common,
       valueType: "token",
-      amount: String(output.value.Token),
+      amount: output.value.Token, // already a precision-safe decimal string
       genesisHash: null,
       itemMetadata: null,
       isToken: true,
@@ -69,7 +69,7 @@ export function mapOutputRow(
   return {
     ...common,
     valueType: "item",
-    amount: String(item.amount),
+    amount: item.amount, // already a precision-safe decimal string
     genesisHash: item.genesis_hash,
     itemMetadata: item.metadata,
     isToken: false,

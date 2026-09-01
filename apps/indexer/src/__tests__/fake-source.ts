@@ -7,7 +7,7 @@ export function buildTokenTx(outputs: { address: string; amount: number }[]): Li
     druid_info: null,
     inputs: [],
     outputs: outputs.map((o) => ({
-      value: { Token: o.amount },
+      value: { Token: String(o.amount) },
       locktime: 0,
       script_public_key: o.address,
     })),
@@ -23,7 +23,7 @@ export function buildSpendTx(
     druid_info: null,
     inputs: [{ previous_out: { t_hash: spend.prevHash, n: spend.n }, script_signature: { sig: "x" } }],
     outputs: outputs.map((o) => ({
-      value: { Token: o.amount },
+      value: { Token: String(o.amount) },
       locktime: 0,
       script_public_key: o.address,
     })),

@@ -18,12 +18,17 @@ describe("mapBlockRow", () => {
 
 describe("mapOutputRow", () => {
   it("maps a token output", () => {
-    const r = mapOutputRow(3, "tx", { value: { Token: 500 }, locktime: 0, script_public_key: "addr" }, 0);
+    const r = mapOutputRow(3, "tx", { value: { Token: "500" }, locktime: 0, script_public_key: "addr" }, 0);
     expect(r).toMatchObject({ txId: 3, txHash: "tx", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr", n: 0, isToken: true });
     expect(r.genesisHash).toBeNull();
   });
   it("maps an item output", () => {
-    const r = mapOutputRow(3, "tx", { value: { Item: { amount: 2, genesis_hash: "g", metadata: "m" } }, locktime: 0, script_public_key: "addr" }, 1);
+    const r = mapOutputRow(3, "tx", { value: { Item: { amount: "2", genesis_hash: "g", metadata: "m" } }, locktime: 0, script_public_key: "addr" }, 1);
     expect(r).toMatchObject({ valueType: "item", amount: "2", genesisHash: "g", itemMetadata: "m", n: 1, isToken: false });
+  });
+  it("passes a token amount beyond 2^53 through as an exact string", () => {
+    const big = "123456789012345678"; // would round to ...680 if coerced through a JS number
+    const r = mapOutputRow(1, "tx", { value: { Token: big }, locktime: 0, script_public_key: "a" }, 0);
+    expect(r.amount).toBe(big);
   });
 });

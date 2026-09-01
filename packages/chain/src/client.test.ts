@@ -158,4 +158,30 @@ describe("LineageNodeClient", () => {
     const result = await client.getTransactionsByHash(["h1", "h2"]);
     expect(result.map(([k]) => k)).toEqual(["h1"]);
   });
+
+  it("preserves token output amounts beyond 2^53 as exact strings", async () => {
+    // JSON.parse would round 123456789012345678 to ...680; a real genesis-scale
+    // output (90090000000000000) already lives on-chain, so this must be exact.
+    const big = "123456789012345678";
+    const body = `[{"key":"000000","item_meta":{"type":"tx"},"data":{"druid_info":null,"fees":[],"inputs":[],"outputs":[{"locktime":0,"script_public_key":"addr","value":{"Token":${big}}}],"version":6}}]`;
+    const fetchImpl = vi.fn().mockImplementation(() => textResponse(body));
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    const result = await client.getTransactionsByHash(["000000"]);
+    const value = result[0]![1].outputs[0]!.value as { Token: string };
+    expect(value.Token).toBe(big);
+    expect(typeof value.Token).toBe("string");
+  });
+
+  it("rewrites only structural amount fields, not lookalike text inside string values", async () => {
+    const big = "123456789012345678";
+    const bytes = JSON.stringify('spends "Token": 999 and "amount": 42');
+    const body = `[{"key":"000000","item_meta":{},"data":{"druid_info":null,"fees":[],"inputs":[{"previous_out":null,"script_signature":{"stack":[{"Bytes":${bytes}}]}}],"outputs":[{"locktime":0,"script_public_key":"a","value":{"Token":${big}}}],"version":6}}]`;
+    const fetchImpl = vi.fn().mockImplementation(() => textResponse(body));
+    const client = new LineageNodeClient({ storageNodeUrl: "http://node", fetchImpl });
+    const tx = (await client.getTransactionsByHash(["000000"]))[0]![1];
+    expect((tx.outputs[0]!.value as { Token: string }).Token).toBe(big);
+    // the lookalike text inside the script bytes must survive untouched
+    const stack = (tx.inputs[0]!.script_signature as { stack: { Bytes: string }[] }).stack;
+    expect(stack[0]!.Bytes).toBe('spends "Token": 999 and "amount": 42');
+  });
 });
