@@ -30,12 +30,14 @@ function num(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
   return parsed;
 }
 
+function parseLockOnBusy(raw: string): "exit" | "wait" {
+  if (raw === "exit" || raw === "wait") return raw; // `===` narrows to the literal type
+  throw new Error(`INDEXER_LOCK_ON_BUSY must be "exit" or "wait", got: ${raw}`);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv): IndexerConfig {
   const healthPortRaw = env.HEALTH_PORT ?? "8080";
-  const lockOnBusy = (env.INDEXER_LOCK_ON_BUSY ?? "exit") as "exit" | "wait";
-  if (lockOnBusy !== "exit" && lockOnBusy !== "wait") {
-    throw new Error(`INDEXER_LOCK_ON_BUSY must be "exit" or "wait", got: ${lockOnBusy}`);
-  }
+  const lockOnBusy = parseLockOnBusy(env.INDEXER_LOCK_ON_BUSY ?? "exit");
   return {
     databaseUrl: required(env, "DATABASE_URL"),
     storageNodeUrl: required(env, "LINEAGE_STORAGE_NODE_URL"),

@@ -21,7 +21,11 @@ export function Button({
     VARIANTS[variant], className,
   );
   if (href && (external || /^https?:\/\//.test(href))) {
-    return <a href={href} target="_blank" rel="noopener noreferrer" className={classes}>{children}</a>;
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={classes}>
+        {children}<span className="sr-only"> (opens in a new tab)</span>
+      </a>
+    );
   }
   if (href) return <Link href={href} className={classes}>{children}</Link>;
   return <button type="button" className={classes}>{children}</button>;

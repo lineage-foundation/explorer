@@ -1,4 +1,4 @@
-import { it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { createDb, type Database, schema, getCirculatingSupply } from "@explorer/db";
 import { createSupplyCron } from "../supply-cron.js";
 import { FakeSourceClient } from "./fake-source.js";
@@ -19,4 +19,26 @@ it("upserts the single circulating_supply row idempotently", async () => {
   await cron.runOnce();
   expect((await getCirculatingSupply(handle.db)).circulatingSupply).toBe("22222");
   expect(await handle.db.select().from(schema.circulatingSupply)).toHaveLength(1);
+});
+
+it("skips an overlapping run while one is already in flight", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  let calls = 0;
+  const source = {
+    getLatestBlock: () => Promise.reject(new Error("unused")),
+    getBlockRange: () => Promise.resolve([]),
+    getTransactionsByHash: () => Promise.resolve([]),
+    getCirculatingSupply: async () => { calls += 1; await gate; return "777"; },
+  };
+  const warn = vi.fn();
+  const cron = createSupplyCron({ db: handle.db, source, logger: { info: () => {}, warn, error: () => {} } });
+  const first = cron.runOnce();          // enters and suspends on the gated fetch
+  await Promise.resolve();
+  await cron.runOnce();                  // in-flight → skips without touching the source
+  expect(warn).toHaveBeenCalledWith(expect.objectContaining({ event: "supply.skip" }), expect.any(String));
+  expect(calls).toBe(1);
+  release();
+  await first;
+  expect((await getCirculatingSupply(handle.db)).circulatingSupply).toBe("777");
 });

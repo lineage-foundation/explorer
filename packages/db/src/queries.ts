@@ -8,6 +8,16 @@ import type { Block, TxIn, TxOut } from "./schema.js";
 
 export type Order = "asc" | "desc";
 export interface Pagination { total: number; limit: number; offset: number; hasMore?: boolean }
+
+// Defense-in-depth: callers (API/web) validate pagination, but clamp here too so
+// a stray negative limit can't make Postgres throw and an absurd limit can't run
+// an unbounded scan.
+function clampLimit(n: number): number {
+  return Math.min(Math.max(Math.trunc(n), 1), 1000);
+}
+function clampOffset(n: number): number {
+  return Math.max(Math.trunc(n), 0);
+}
 export interface BlockListItem {
   version: number; num: number; hash: string; previousHash: string | null;
   timestamp: Date | null; nbTx: number | null; reward: string | null; miner: string | null;
@@ -54,8 +64,8 @@ export async function getBlocks(
   db: Database,
   opts: { limit?: number; offset?: number; order?: Order },
 ): Promise<{ blocks: BlockListItem[]; pagination: Pagination }> {
-  const limit = opts.limit ?? 10;
-  const offset = opts.offset ?? 0;
+  const limit = clampLimit(opts.limit ?? 10);
+  const offset = clampOffset(opts.offset ?? 0);
   const direction = (opts.order ?? "desc") === "asc" ? asc : desc;
   const total = await getBlocksCount(db);
   const rows = await db
@@ -67,29 +77,29 @@ export async function getBlocks(
     .orderBy(direction(block.num))
     .limit(limit)
     .offset(offset);
-  // Block reward = the sum of the block's coinbase (mining) transaction outputs.
+  // Block reward = the sum of the block's coinbase outputs; miner = the address
+  // on the coinbase's first output. These are independent — fetch in parallel.
   const blockHashes = rows.map((r) => r.hash);
-  const rewards = blockHashes.length
-    ? await db
-        .select({ blockHash: transaction.blockHash, reward: sql<string>`sum(${txOut.amount})` })
-        .from(transaction)
-        .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
-        .where(and(inArray(transaction.blockHash, blockHashes), eq(transaction.coinbase, true)))
-        .groupBy(transaction.blockHash)
-    : [];
+  const [rewards, miners] = blockHashes.length
+    ? await Promise.all([
+        db
+          .select({ blockHash: transaction.blockHash, reward: sql<string>`sum(${txOut.amount})` })
+          .from(transaction)
+          .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
+          .where(and(inArray(transaction.blockHash, blockHashes), eq(transaction.coinbase, true)))
+          .groupBy(transaction.blockHash),
+        db
+          .select({ blockHash: transaction.blockHash, address: txOut.scriptPublicKey })
+          .from(transaction)
+          .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
+          .where(and(
+            inArray(transaction.blockHash, blockHashes),
+            eq(transaction.coinbase, true),
+            eq(txOut.n, 0),
+          )),
+      ])
+    : [[], []];
   const rewardByHash = new Map(rewards.map((r) => [r.blockHash, r.reward]));
-  // Miner = the address on the coinbase transaction's first output.
-  const miners = blockHashes.length
-    ? await db
-        .select({ blockHash: transaction.blockHash, address: txOut.scriptPublicKey })
-        .from(transaction)
-        .innerJoin(txOut, eq(txOut.txHash, transaction.hash))
-        .where(and(
-          inArray(transaction.blockHash, blockHashes),
-          eq(transaction.coinbase, true),
-          eq(txOut.n, 0),
-        ))
-    : [];
   const minerByHash = new Map(miners.map((m) => [m.blockHash, m.address]));
   return {
     blocks: rows.map((r) => ({
@@ -135,6 +145,15 @@ export async function getBlockTransactions(
 ): Promise<{ transactions: BlockTxItem[] } | null> {
   const found = await getBlockByHashOrNumber(db, hashOrNumber);
   if (!found) return null;
+  return getBlockTransactionsForBlock(db, found);
+}
+
+// Same as getBlockTransactions but for a block the caller has already resolved,
+// avoiding a redundant block lookup.
+export async function getBlockTransactionsForBlock(
+  db: Database,
+  found: { hash: string; timestamp: Date | null },
+): Promise<{ transactions: BlockTxItem[] }> {
   // Include the coinbase (block-reward) transaction, ordered first, so a block's
   // full transaction set is visible.
   const txs = await db
@@ -144,7 +163,9 @@ export async function getBlockTransactions(
     })
     .from(transaction)
     .where(eq(transaction.blockHash, found.hash))
-    .orderBy(desc(transaction.coinbase));
+    // coinbase first, then a unique tiebreaker so multiple non-coinbase txs in a
+    // block have a stable order across loads.
+    .orderBy(desc(transaction.coinbase), asc(transaction.id));
   const hashes = txs.map((t) => t.hash);
   const firstOuts = hashes.length
     ? await db.select({ txHash: txOut.txHash, valueType: txOut.valueType })
@@ -172,8 +193,8 @@ export async function getTransactions(
   db: Database,
   opts: { limit?: number; offset?: number; order?: Order },
 ): Promise<{ transactions: TxListItem[]; pagination: Pagination }> {
-  const limit = opts.limit ?? 10;
-  const offset = opts.offset ?? 0;
+  const limit = clampLimit(opts.limit ?? 10);
+  const offset = clampOffset(opts.offset ?? 0);
   const direction = (opts.order ?? "desc") === "asc" ? asc : desc;
   const [totalRow] = await db
     .select({ value: count() }).from(transaction).where(eq(transaction.coinbase, false));
@@ -217,34 +238,37 @@ export async function getTransactions(
 
 async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]> {
   if (hashes.length === 0) return [];
-  const txs = await db
-    .select({
-      hash: transaction.hash, blockHash: transaction.blockHash, version: transaction.version,
-      coinbase: transaction.coinbase,
-      fees: transaction.fees, druidInfo: transaction.druidInfo, timestamp: block.timestamp,
-    })
-    .from(transaction)
-    .innerJoin(block, eq(block.hash, transaction.blockHash))
-    .where(inArray(transaction.hash, hashes));
-  const ins = await db.select().from(txIn).where(inArray(txIn.txHash, hashes));
-  const outs = await db.select().from(txOut).where(inArray(txOut.txHash, hashes));
-  const expanded = await db
-    .select({
-      txHash: txInExpanded.txHash,
-      previousOutTxHash: txInExpanded.previousOutTxHash,
-      previousOutTxN: txInExpanded.previousOutTxN,
-      fromAddress: txInExpanded.outScriptPublicKey,
-      amount: txOut.amount,
-    })
-    .from(txInExpanded)
-    .leftJoin(
-      txOut,
-      and(
-        eq(txOut.txHash, txInExpanded.previousOutTxHash),
-        eq(txOut.n, txInExpanded.previousOutTxN),
-      ),
-    )
-    .where(inArray(txInExpanded.txHash, hashes));
+  // The four reads are independent — issue them in parallel.
+  const [txs, ins, outs, expanded] = await Promise.all([
+    db
+      .select({
+        hash: transaction.hash, blockHash: transaction.blockHash, version: transaction.version,
+        coinbase: transaction.coinbase,
+        fees: transaction.fees, druidInfo: transaction.druidInfo, timestamp: block.timestamp,
+      })
+      .from(transaction)
+      .innerJoin(block, eq(block.hash, transaction.blockHash))
+      .where(inArray(transaction.hash, hashes)),
+    db.select().from(txIn).where(inArray(txIn.txHash, hashes)),
+    db.select().from(txOut).where(inArray(txOut.txHash, hashes)),
+    db
+      .select({
+        txHash: txInExpanded.txHash,
+        previousOutTxHash: txInExpanded.previousOutTxHash,
+        previousOutTxN: txInExpanded.previousOutTxN,
+        fromAddress: txInExpanded.outScriptPublicKey,
+        amount: txOut.amount,
+      })
+      .from(txInExpanded)
+      .leftJoin(
+        txOut,
+        and(
+          eq(txOut.txHash, txInExpanded.previousOutTxHash),
+          eq(txOut.n, txInExpanded.previousOutTxN),
+        ),
+      )
+      .where(inArray(txInExpanded.txHash, hashes)),
+  ]);
   const insByHash = groupBy(ins, (i) => i.txHash);
   const outsByHash = groupBy(outs, (o) => o.txHash);
   const expandedByKey = new Map(
@@ -316,8 +340,8 @@ export async function getAccountTransactions(
   address: string,
   opts: { limit?: number; offset?: number },
 ): Promise<{ transactions: TxDetail[]; pagination: Pagination }> {
-  const limit = opts.limit ?? 25;
-  const offset = opts.offset ?? 0;
+  const limit = clampLimit(opts.limit ?? 25);
+  const offset = clampOffset(opts.offset ?? 0);
   // Match transactions that pay this address via any output. The tx_out join
   // alone is sufficient; a tx_in join would additionally require the tx to have
   // inputs, silently excluding coinbase (mining-reward) transactions, which have
@@ -380,6 +404,7 @@ function escapeLike(value: string): string {
  * transaction.hash and tx_out."scriptPublicKey" before a large production chain.
  */
 export async function searchByPrefix(db: Database, prefix: string, limit: number): Promise<PrefixMatches> {
+  limit = clampLimit(limit);
   const pattern = `${escapeLike(prefix.toLowerCase())}%`;
   const [blocks, transactions, addressRows] = await Promise.all([
     db.select({ num: block.num, hash: block.hash }).from(block)

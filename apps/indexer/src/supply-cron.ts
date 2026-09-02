@@ -8,8 +8,16 @@ export function createSupplyCron(deps: { db: Database; source: SourceClient; log
   runOnce: () => Promise<void>;
 } {
   const { db, source, logger } = deps;
+  let inFlight = false;
   return {
     async runOnce() {
+      // Skip if a previous run is still going (a slow fetch + the interval timer
+      // could otherwise overlap and let a stale write land after a fresh one).
+      if (inFlight) {
+        logger.warn({ event: "supply.skip" }, "supply update already in progress; skipping");
+        return;
+      }
+      inFlight = true;
       try {
         const value = await source.getCirculatingSupply();
         await db.insert(schema.circulatingSupply)
@@ -21,6 +29,8 @@ export function createSupplyCron(deps: { db: Database; source: SourceClient; log
         logger.info({ event: "supply.updated", value }, "circulating supply updated");
       } catch (err) {
         logger.error({ event: "supply.error", err: String(err) }, "supply update failed");
+      } finally {
+        inFlight = false;
       }
     },
   };

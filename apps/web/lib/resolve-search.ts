@@ -19,8 +19,10 @@ export async function resolveSearch(db: Database, query: string): Promise<Sugges
   const q = query.trim();
   if (q === "") return [];
 
-  // Pure-numeric input is a block number (exact).
-  if (/^[0-9]+$/.test(q)) {
+  // Pure-numeric input is a block number (exact). Bound the length so an
+  // absurdly long digit string isn't rounded by Number.parseInt — no real block
+  // height approaches 15 digits.
+  if (/^[0-9]{1,15}$/.test(q)) {
     const hash = await getBlockHashByNum(db, Number.parseInt(q, 10));
     const found = hash !== null;
     return [{

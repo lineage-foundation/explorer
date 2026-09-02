@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@explorer/config": "workspace:^",
-    "bignumber.js": "^9.1.2"
+    "bignumber.js": "^11.1.5"
   },
   "devDependencies": {
     "eslint": "^9.11.0",

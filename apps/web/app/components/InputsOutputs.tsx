@@ -4,7 +4,7 @@ import { Mono, Tag } from "@explorer/ui";
 import { formatLngx, truncateHash } from "../../lib/format.js";
 import { TOKEN_TICKER } from "@explorer/config";
 
-function sumAmounts(values: (string | null)[]): string {
+export function sumAmounts(values: (string | null)[]): string {
   const total = values.reduce((acc, v) => acc + (v ? BigInt(v) : 0n), 0n);
   return formatLngx(total.toString());
 }

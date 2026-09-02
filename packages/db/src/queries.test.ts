@@ -259,6 +259,13 @@ describe("read queries", () => {
     expect(await getLatestCoinsHistoryOutIds(db(), "tie")).toEqual([22]);
   });
 
+  it("clamps out-of-range pagination instead of letting Postgres throw", async () => {
+    const res = await getBlocks(db(), { limit: -5, offset: -10 });
+    expect(res.pagination.limit).toBe(1); // negative limit clamped up
+    expect(res.pagination.offset).toBe(0); // negative offset clamped up
+    expect(res.blocks.length).toBeLessThanOrEqual(1);
+  });
+
   it("searches item outputs by metadata substring, genesis class, and spent status", async () => {
     await db().insert(block).values({
       version: 1, num: 800, hash: "ib", timestamp: new Date("2024-07-01T00:00:00Z"), nbTx: 6,

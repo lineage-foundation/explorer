@@ -42,6 +42,9 @@ export function createHealthServer(opts: { port: number; getStatus: () => Status
       return new Promise((resolve) => {
         if (!server) return resolve();
         server.close(() => resolve());
+        // Force idle keep-alive connections closed so a monitoring client can't
+        // hold shutdown open past the orchestrator's grace period.
+        server.closeAllConnections();
       });
     },
   };

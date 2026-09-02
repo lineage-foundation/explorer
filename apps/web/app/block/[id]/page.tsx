@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getBlockByHashOrNumber, getBlockTransactions, getBlockCoinbaseInfo, getMaxBlockNum } from "@explorer/db";
+import { getBlockByHashOrNumber, getBlockTransactionsForBlock, getBlockCoinbaseInfo, getMaxBlockNum } from "@explorer/db";
 import {
   Card, Table, THead, TBody, TR, TH, TD, Mono, Pill, CopyButton, EmptyState,
 } from "@explorer/ui";
@@ -32,11 +32,11 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
   const block = await getBlockByHashOrNumber(db, id);
   if (!block) notFound();
   const [txsRes, coinbase, maxNum] = await Promise.all([
-    getBlockTransactions(db, id),
+    getBlockTransactionsForBlock(db, block),
     getBlockCoinbaseInfo(db, block.hash),
     getMaxBlockNum(db),
   ]);
-  const txs = txsRes?.transactions ?? [];
+  const txs = txsRes.transactions;
 
   return (
     <div className="space-y-6">
