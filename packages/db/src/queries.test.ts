@@ -9,7 +9,7 @@ import {
   getTransactions, getTransactionsCount, getTransactionByHash,
   getAccountBalance, getAccountTransactions, getCirculatingSupply,
   getMaxBlockNum, getBlockHashByNum, getLatestCoinsHistoryOutIds, searchByPrefix,
-  getBlockCoinbaseInfo, searchItems,
+  getBlockCoinbaseInfo, searchItems, deleteFromHeight, coinsHistoryHasNullBlockNum,
 } from "./queries.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
@@ -321,5 +321,44 @@ describe("read queries", () => {
       await db().delete(transaction).where(inArray(transaction.hash, ["im1", "im2", "im3", "im4", "im5", "spend1"]));
       await db().delete(block).where(eq(block.hash, "ib"));
     }
+  });
+
+  it("deleteFromHeight removes only blocks above the fork and their dependent rows", async () => {
+    const nums = [10, 11, 12];
+    await db().insert(block).values(nums.map((n) => ({
+      version: 1, num: n, hash: `df${n}`, timestamp: new Date(`2024-08-${n}T00:00:00Z`), nbTx: 1,
+    })));
+    await db().insert(transaction).values(nums.map((n) => ({ hash: `dftx${n}`, blockHash: `df${n}`, version: 1, coinbase: false })));
+    await db().insert(txOut).values(nums.map((n) => ({ txId: 0, txHash: `dftx${n}`, valueType: "token", amount: "1", locktime: "0", scriptPublicKey: "dfaddr", n: 0 })));
+    await db().insert(txIn).values(nums.map((n) => ({ txId: 0, txHash: `dftx${n}`, scriptSignature: {} })));
+    await db().insert(coinsHistory).values(nums.map((n) => ({ address: "dfaddr", date: new Date(`2024-08-${n}T00:00:00Z`), blockNum: n, outIds: [n] })));
+    try {
+      await deleteFromHeight(db(), 10); // keep 10, drop 11 and 12
+      const blocksLeft = await db().select().from(block).where(inArray(block.hash, ["df10", "df11", "df12"]));
+      expect(blocksLeft.map((b) => b.num)).toEqual([10]);
+      const txsLeft = await db().select().from(transaction).where(inArray(transaction.hash, ["dftx10", "dftx11", "dftx12"]));
+      expect(txsLeft.map((t) => t.hash)).toEqual(["dftx10"]);
+      expect(await db().select().from(txOut).where(inArray(txOut.txHash, ["dftx11", "dftx12"]))).toHaveLength(0);
+      expect(await db().select().from(txIn).where(inArray(txIn.txHash, ["dftx11", "dftx12"]))).toHaveLength(0);
+      const chLeft = await db().select().from(coinsHistory).where(eq(coinsHistory.address, "dfaddr"));
+      expect(chLeft.map((c) => c.blockNum)).toEqual([10]);
+    } finally {
+      await db().delete(txIn).where(inArray(txIn.txHash, ["dftx10", "dftx11", "dftx12"]));
+      await db().delete(txOut).where(inArray(txOut.txHash, ["dftx10", "dftx11", "dftx12"]));
+      await db().delete(transaction).where(inArray(transaction.hash, ["dftx10", "dftx11", "dftx12"]));
+      await db().delete(coinsHistory).where(eq(coinsHistory.address, "dfaddr"));
+      await db().delete(block).where(inArray(block.hash, ["df10", "df11", "df12"]));
+    }
+  });
+
+  it("coinsHistoryHasNullBlockNum flags legacy untagged snapshots", async () => {
+    // Runs last: a clean slate for a global check (no later test needs coins_history).
+    await db().delete(coinsHistory);
+    expect(await coinsHistoryHasNullBlockNum(db())).toBe(false);
+    await db().insert(coinsHistory).values({ address: "tagged", date: new Date("2024-01-01T00:00:00Z"), blockNum: 5, outIds: [] });
+    expect(await coinsHistoryHasNullBlockNum(db())).toBe(false);
+    await db().insert(coinsHistory).values({ address: "legacy", date: new Date("2024-01-02T00:00:00Z"), outIds: [] });
+    expect(await coinsHistoryHasNullBlockNum(db())).toBe(true);
+    await db().delete(coinsHistory);
   });
 });

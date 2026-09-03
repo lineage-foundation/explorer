@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNotNull, like, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, like, sql } from "drizzle-orm";
 import BigNumber from "bignumber.js";
 import type { Database } from "./client.js";
 import {
@@ -497,6 +497,44 @@ export async function resetIndexedChain(db: Database): Promise<void> {
     TRUNCATE TABLE ${txInExpanded}, ${txIn}, ${txOut}, ${coinsHistory}, ${transaction}, ${block}
     RESTART IDENTITY CASCADE
   `);
+}
+
+/**
+ * Rewind indexed data to a fork point: delete every row belonging to blocks with
+ * `num > fork` (a shallow-reorg rollback), leaving the fork block and everything
+ * below it intact. Runs in one transaction, deleting children before parents.
+ *
+ * Balances self-correct: removing the post-fork coins_history snapshots reverts
+ * each touched address to its pre-fork snapshot, and an output spent in a
+ * rolled-back block becomes unspent again (its spending tx_in is deleted). A
+ * pre-fork snapshot can only reference pre-fork outputs, so nothing dangles.
+ * Requires every affected snapshot to carry a block_num — callers must check
+ * `coinsHistoryHasNullBlockNum` first and fall back to a full resync otherwise.
+ */
+export async function deleteFromHeight(db: Database, fork: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    const doomedTx = sql`
+      select ${transaction.hash} from ${transaction}
+      where ${transaction.blockHash} in (select ${block.hash} from ${block} where ${block.num} > ${fork})`;
+    await tx.execute(sql`delete from ${txInExpanded} where ${txInExpanded.txHash} in (${doomedTx})`);
+    await tx.execute(sql`delete from ${txIn} where ${txIn.txHash} in (${doomedTx})`);
+    await tx.execute(sql`delete from ${txOut} where ${txOut.txHash} in (${doomedTx})`);
+    await tx.execute(sql`delete from ${transaction}
+      where ${transaction.blockHash} in (select ${block.hash} from ${block} where ${block.num} > ${fork})`);
+    await tx.execute(sql`delete from ${coinsHistory} where ${coinsHistory.blockNum} > ${fork}`);
+    await tx.execute(sql`delete from ${block} where ${block.num} > ${fork}`);
+  });
+}
+
+/**
+ * Whether any coins_history row predates the block_num column (legacy NULL). A
+ * reorg rewind can't safely delete such snapshots by block_num, so its presence
+ * forces the full-resync fallback.
+ */
+export async function coinsHistoryHasNullBlockNum(db: Database): Promise<boolean> {
+  const [row] = await db.select({ id: coinsHistory.id }).from(coinsHistory)
+    .where(isNull(coinsHistory.blockNum)).limit(1);
+  return row !== undefined;
 }
 
 export async function getLatestCoinsHistoryOutIds(db: Database, address: string): Promise<number[]> {

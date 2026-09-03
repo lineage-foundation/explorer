@@ -1,8 +1,8 @@
-import { it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { createDb, type Database, schema, getBlocks, getMaxBlockNum } from "@explorer/db";
+import { it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
+import { createDb, type Database, schema, getBlocks, getMaxBlockNum, getBlockHashByNum, getAccountBalance } from "@explorer/db";
 import { createIngestor, ContinuityError, MissingTransactionError } from "../ingestor.js";
 import { loadConfig } from "../config.js";
-import { FakeSourceClient, buildBlock, buildTokenTx } from "./fake-source.js";
+import { FakeSourceClient, buildBlock, buildTokenTx, buildSpendTx } from "./fake-source.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@127.0.0.1:5432/explorer_test";
 const noopLogger = { info: () => {}, error: () => {}, warn: () => {} };
@@ -69,6 +69,39 @@ it("resyncs when the source reorgs to a same-height chain with different hashes"
   await createIngestor({ db: db(), source: forked, config: cfg(), logger: noopLogger }).runCycle();
   const blocks = (await getBlocks(db(), { limit: 100, offset: 0, order: "asc" })).blocks;
   expect(blocks.map((b) => b.hash)).toEqual(["F0", "F1", "F2", "F3"]);
+});
+
+it("rewinds to the fork point on a shallow reorg and restores balances (reorgMaxDepth > 0)", async () => {
+  // chain A: block 0 mints 100 to A; block 1 spends A's 100 to B.
+  const a = new FakeSourceClient();
+  a.addBlock("A0", buildBlock({ num: 0, hash: "A0", previousHash: "", miningTxHash: "cb0", txHashes: [] }));
+  a.addTx("cb0", buildTokenTx([{ address: "A", amount: 100 }]));
+  a.addBlock("A1", buildBlock({ num: 1, hash: "A1", previousHash: "A0", miningTxHash: "cb1", txHashes: ["t1"] }));
+  a.addTx("cb1", buildTokenTx([{ address: "M", amount: 50 }]));
+  a.addTx("t1", buildSpendTx({ prevHash: "cb0", n: 0 }, [{ address: "B", amount: 100 }]));
+  const reorgCfg = loadConfig({
+    DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", INDEXER_MAX_BLOCK_RANGE: "10", INDEXER_REORG_MAX_DEPTH: "10",
+  });
+  await createIngestor({ db: db(), source: a, config: reorgCfg, logger: noopLogger }).runCycle();
+  expect((await getAccountBalance(db(), "A")).balance).toBe("0");
+  expect((await getAccountBalance(db(), "B")).balance).toBe("100");
+
+  // chain B forks at block 0: a different block 1 that never spends A.
+  const b = new FakeSourceClient();
+  b.addBlock("A0", buildBlock({ num: 0, hash: "A0", previousHash: "", miningTxHash: "cb0", txHashes: [] }));
+  b.addTx("cb0", buildTokenTx([{ address: "A", amount: 100 }]));
+  b.addBlock("B1", buildBlock({ num: 1, hash: "B1", previousHash: "A0", miningTxHash: "cb1b", txHashes: [] }));
+  b.addTx("cb1b", buildTokenTx([{ address: "M", amount: 50 }]));
+  const warn = vi.fn();
+  await createIngestor({ db: db(), source: b, config: reorgCfg, logger: { info: () => {}, warn, error: () => {} } }).runCycle();
+
+  // an incremental rewind to the fork (not a full resync)
+  expect(warn).toHaveBeenCalledWith(expect.objectContaining({ event: "chain.rewind", fork: 0 }), expect.any(String));
+  expect(await getBlockHashByNum(db(), 1)).toBe("B1"); // block 1 replaced
+  // A's spend was rolled back → balance restored; B's receipt is gone
+  expect((await getAccountBalance(db(), "A")).balance).toBe("100");
+  expect((await getAccountBalance(db(), "B")).balance).toBe("0");
+  expect(await getMaxBlockNum(db())).toBe(1);
 });
 
 it("does not wipe when the source merely lags behind (lower tip, same history)", async () => {

@@ -1,5 +1,5 @@
 import type { Database } from "@explorer/db";
-import { getMaxBlockNum, getBlockHashByNum, resetIndexedChain } from "@explorer/db";
+import { getMaxBlockNum, getBlockHashByNum, resetIndexedChain, deleteFromHeight, coinsHistoryHasNullBlockNum } from "@explorer/db";
 import type { LineageBlock } from "@explorer/chain";
 import type { IndexerConfig } from "./config.js";
 import type { SourceClient } from "./source.js";
@@ -47,15 +47,11 @@ export function createIngestor(deps: {
       // Detect a diverged source chain (reset or reorg) before advancing. The
       // ingestor otherwise assumes monotonic forward growth: after a reset it
       // would see stored tip > source tip, report "caught up", and stall on
-      // stale data forever. On confirmed divergence, resync from genesis.
+      // stale data forever. On confirmed divergence, rewind to the fork point
+      // (shallow reorg) or resync from genesis.
       let maxNum = storedMax;
       if (storedMax !== null && (await sourceDiverged(db, source, storedMax, latest))) {
-        logger.warn(
-          { event: "chain.reset", storedMax, sourceLatest: latest },
-          "source chain diverged from indexed data — resyncing from genesis",
-        );
-        await resetIndexedChain(db);
-        maxNum = null;
+        maxNum = await handleDivergence(db, source, storedMax, latest, config, logger);
       }
 
       const from = maxNum === null ? config.genesisHeight : maxNum + 1;
@@ -115,6 +111,64 @@ async function sourceDiverged(
   if (sourceHash === undefined) return false; // inconclusive — do not wipe
   const storedHash = await getBlockHashByNum(db, probeNum);
   return sourceHash !== storedHash;
+}
+
+const FORK_SEARCH_CHUNK = 100;
+
+/**
+ * Respond to confirmed divergence: attempt an incremental rewind to the fork
+ * point when enabled and safe, otherwise fall back to a full resync. Returns the
+ * new stored tip to resume from (`fork`), or `null` after a full resync (replay
+ * from genesis). A full resync is always safe and can never leave a wrong
+ * balance, so any uncertainty falls back to it.
+ */
+async function handleDivergence(
+  db: Database, source: SourceClient, storedMax: number, latest: number,
+  config: IndexerConfig, logger: WorkerLogger,
+): Promise<number | null> {
+  if (config.reorgMaxDepth > 0) {
+    const fork = await findForkPoint(db, source, storedMax, latest, config.reorgMaxDepth, config.genesisHeight);
+    // A legacy snapshot without a block_num can't be rolled back by block_num;
+    // its presence forces the full resync (which repopulates block_num).
+    if (fork !== null && !(await coinsHistoryHasNullBlockNum(db))) {
+      await deleteFromHeight(db, fork);
+      logger.warn({ event: "chain.rewind", fork, storedMax, sourceLatest: latest }, "reorg — rewound to fork point");
+      return fork;
+    }
+  }
+  await resetIndexedChain(db);
+  logger.warn(
+    { event: "chain.reset", storedMax, sourceLatest: latest },
+    "source chain diverged from indexed data — resyncing from genesis",
+  );
+  return null;
+}
+
+/**
+ * Walk block hashes backward from the lower of the two tips to find the highest
+ * height where our stored block hash matches the source's — the fork point.
+ * Bounded by `maxDepth` (and `genesisHeight`); returns `null` if no common
+ * ancestor is found in range or any probe is inconclusive (→ full resync).
+ */
+async function findForkPoint(
+  db: Database, source: SourceClient, storedMax: number, latest: number,
+  maxDepth: number, genesisHeight: number,
+): Promise<number | null> {
+  const start = Math.min(storedMax, latest);
+  const floor = Math.max(start - maxDepth, genesisHeight);
+  for (let hi = start; hi >= floor; hi -= FORK_SEARCH_CHUNK) {
+    const lo = Math.max(hi - FORK_SEARCH_CHUNK + 1, floor);
+    const entries = await source.getBlockRange(lo, hi);
+    const sourceHashByNum = new Map<number, string>();
+    for (const [hash, wrapper] of entries) sourceHashByNum.set(wrapper.block.header.b_num, hash);
+    for (let n = hi; n >= lo; n--) {
+      const theirHash = sourceHashByNum.get(n);
+      const ourHash = await getBlockHashByNum(db, n);
+      if (theirHash === undefined || ourHash === null) return null; // inconclusive → full resync
+      if (theirHash === ourHash) return n; // highest common ancestor
+    }
+  }
+  return null; // no common ancestor within maxDepth
 }
 
 async function ingestOne(

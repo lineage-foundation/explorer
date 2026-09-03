@@ -29,6 +29,13 @@
       "when": 1788252824978,
       "tag": "0003_chunky_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788417086045,
+      "tag": "0004_solid_christian_walker",
+      "breakpoints": true
     }
   ]
 }

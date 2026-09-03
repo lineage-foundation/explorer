@@ -94,7 +94,7 @@ export async function processBlock(
     for (const address of tracker.touched()) {
       const previous = await getLatestCoinsHistoryOutIds(tx, address);
       const outIds = tracker.mergeFinal(previous, address);
-      await tx.insert(schema.coinsHistory).values({ address, date: blockRow.timestamp, outIds });
+      await tx.insert(schema.coinsHistory).values({ address, date: blockRow.timestamp, blockNum: blockRow.num, outIds });
     }
   });
 }

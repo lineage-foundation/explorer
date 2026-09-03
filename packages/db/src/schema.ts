@@ -145,11 +145,16 @@ export const coinsHistory = pgTable(
     id: serial("id").primaryKey(),
     address: varchar("address").notNull(),
     date: timestamp("date", { withTimezone: false }).notNull(),
+    // The block that produced this snapshot. Nullable so the migration needs no
+    // backfill; a reorg rewind requires it (deletes snapshots by block_num) and
+    // falls back to a full resync if any legacy row still has NULL here.
+    blockNum: integer("block_num"),
     outIds: jsonb("outIds").notNull(),
     createdAt: timestamp("createdAt", { withTimezone: false }).defaultNow().notNull(),
   },
   (t) => ({
     addressDateIdx: index("IX_ch_address_date").on(t.address, t.date),
+    blockNumIdx: index("IX_ch_block_num").on(t.blockNum),
   }),
 );
 

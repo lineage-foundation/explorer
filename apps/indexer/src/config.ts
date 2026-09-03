@@ -13,6 +13,7 @@ export interface IndexerConfig {
   lockOnBusy: "exit" | "wait";
   healthPort: number | null;
   healthMaxConsecutiveFailures: number;
+  reorgMaxDepth: number;
   logLevel: string;
 }
 
@@ -54,6 +55,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): IndexerConfig {
     lockOnBusy,
     healthPort: healthPortRaw === "" ? null : num(env, "HEALTH_PORT", 8080),
     healthMaxConsecutiveFailures: num(env, "INDEXER_HEALTH_MAX_CONSECUTIVE_FAILURES", 10),
+    // 0 = always full resync on divergence (default). >0 enables incremental
+    // reorg rewind up to this many blocks below the tip, else full resync.
+    reorgMaxDepth: num(env, "INDEXER_REORG_MAX_DEPTH", 0),
     logLevel: env.LOG_LEVEL ?? "info",
   };
 }
