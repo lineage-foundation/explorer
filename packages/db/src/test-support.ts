@@ -1,7 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
+import { readMigrationStatements } from "./migrate.js";
 
 const APP_TABLES = [
   "block",
@@ -13,20 +13,7 @@ const APP_TABLES = [
   "circulating_supply",
 ] as const;
 
-// All committed migration statements, in order across every migration file.
-function migrationStatements(): string[] {
-  const drizzleDir = join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
-  const files = readdirSync(drizzleDir)
-    .filter((name) => name.endsWith(".sql"))
-    .sort();
-  if (files.length === 0) throw new Error(`No migration .sql found in ${drizzleDir}`);
-  return files.flatMap((file) =>
-    readFileSync(join(drizzleDir, file), "utf8")
-      .split("--> statement-breakpoint")
-      .map((statement) => statement.trim())
-      .filter((statement) => statement.length > 0),
-  );
-}
+const DRIZZLE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
 
 /**
  * Prepare a database for tests by applying the committed migration directly and
@@ -43,7 +30,7 @@ function migrationStatements(): string[] {
 export async function resetTestSchema(connectionString: string): Promise<void> {
   const sql = postgres(connectionString, { max: 1 });
   try {
-    for (const statement of migrationStatements()) {
+    for (const statement of readMigrationStatements(DRIZZLE_DIR)) {
       await sql.unsafe(statement);
     }
     await sql.unsafe(

@@ -14,6 +14,8 @@ export interface IndexerConfig {
   healthPort: number | null;
   healthMaxConsecutiveFailures: number;
   reorgMaxDepth: number;
+  migrateOnStart: boolean;
+  migrationsDir: string;
   logLevel: string;
 }
 
@@ -58,6 +60,10 @@ export function loadConfig(env: NodeJS.ProcessEnv): IndexerConfig {
     // 0 = always full resync on divergence (default). >0 enables incremental
     // reorg rewind up to this many blocks below the tip, else full resync.
     reorgMaxDepth: num(env, "INDEXER_REORG_MAX_DEPTH", 0),
+    // Apply the committed (idempotent) migrations on startup — used in the
+    // container image so the indexer converges the schema before ingesting.
+    migrateOnStart: (env.INDEXER_MIGRATE_ON_START ?? "false") === "true",
+    migrationsDir: env.MIGRATIONS_DIR ?? "./drizzle",
     logLevel: env.LOG_LEVEL ?? "info",
   };
 }

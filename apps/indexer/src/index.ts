@@ -1,11 +1,17 @@
 import { LineageNodeClient } from "@explorer/chain";
 import { createDb } from "@explorer/db";
+import { applyMigrations } from "@explorer/db/migrate";
 import { loadConfig } from "./config.js";
 import { createWorker } from "./worker.js";
 import { logger } from "./logger.js";
 
 async function main(): Promise<void> {
   const config = loadConfig(process.env);
+  if (config.migrateOnStart) {
+    logger.info({ event: "migrate.start", dir: config.migrationsDir }, "applying migrations");
+    await applyMigrations(config.databaseUrl, config.migrationsDir);
+    logger.info({ event: "migrate.done" }, "migrations applied");
+  }
   const { db, sql } = createDb(config.databaseUrl);
   const source = new LineageNodeClient({
     storageNodeUrl: config.storageNodeUrl,
