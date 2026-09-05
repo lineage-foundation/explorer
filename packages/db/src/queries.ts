@@ -221,11 +221,24 @@ export async function getTransactions(
         .from(txOut).where(and(inArray(txOut.txHash, hashes), eq(txOut.n, 0)))
     : [];
   const typeByHash = new Map(firstOuts.map((o) => [o.txHash, o.valueType]));
-  // Transaction value = the sum of all of its outputs.
+  // Transaction value = the NET amount transferred: the sum of token outputs
+  // excluding change (outputs that return to one of the tx's own input-owner
+  // addresses). A tx with no resolved inputs (e.g. coinbase) has no owners, so
+  // all its outputs count.
   const values = hashes.length
     ? await db
         .select({ txHash: txOut.txHash, value: sql<string>`sum(${txOut.amount})` })
-        .from(txOut).where(inArray(txOut.txHash, hashes)).groupBy(txOut.txHash)
+        .from(txOut)
+        .where(and(
+          inArray(txOut.txHash, hashes),
+          eq(txOut.valueType, "token"),
+          sql`(${txOut.scriptPublicKey} is null or ${txOut.scriptPublicKey} not in (
+            select ${txInExpanded.outScriptPublicKey} from ${txInExpanded}
+            where ${txInExpanded.txHash} = ${txOut.txHash}
+              and ${txInExpanded.outScriptPublicKey} is not null
+          ))`,
+        ))
+        .groupBy(txOut.txHash)
     : [];
   const valueByHash = new Map(values.map((v) => [v.txHash, v.value]));
   return {

@@ -13,12 +13,18 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
   const inTotal = sumAmounts(tx.ins.map((i) => i.amount));
   const outTotal = sumAmounts(tx.outs.filter((o) => o.valueType === "token").map((o) => o.amount));
   const inputAddrs = new Set(tx.ins.map((i) => i.fromAddress).filter(Boolean));
+  // Net transferred: token outputs excluding change (outputs back to an input owner).
+  const netSent = sumAmounts(
+    tx.outs
+      .filter((o) => o.valueType === "token" && !(o.scriptPublicKey && inputAddrs.has(o.scriptPublicKey)))
+      .map((o) => o.amount),
+  );
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-center gap-3 rounded-md border border-border bg-bg-raised px-3 py-2 font-mono text-sm">
         {coinbase
           ? <span className="text-accent">newly minted → {outTotal} {TOKEN_TICKER}</span>
-          : <><span>{inTotal} {TOKEN_TICKER} in</span><span className="text-accent">→</span><span>{outTotal} {TOKEN_TICKER} out</span></>}
+          : <><span>{inTotal} {TOKEN_TICKER} in</span><span className="text-accent">→</span><span className="text-accent">{netSent} {TOKEN_TICKER} sent</span></>}
       </div>
 
       <h3 className="mb-2 font-display text-sm text-text">Inputs <span className="font-mono text-xs text-text-subtle">· {coinbase ? "coinbase" : tx.ins.length}</span></h3>

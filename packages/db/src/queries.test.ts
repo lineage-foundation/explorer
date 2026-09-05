@@ -125,6 +125,29 @@ describe("read queries", () => {
     expect(res.transactions.find((t) => t.hash === "tx_2")?.value).toBeNull(); // no outputs
   });
 
+  it("transaction value is the net sent, excluding change back to the sender", async () => {
+    // nv1 is funded by addr_S; it pays 3 to addr_R and returns 35 change to
+    // addr_S. Value must be the net transferred (3), not the gross 38.
+    await db().insert(block).values({ version: 1, num: 700, hash: "nvb", timestamp: new Date("2024-09-01T00:00:00Z"), nbTx: 1 });
+    await db().insert(transaction).values({ hash: "nv1", blockHash: "nvb", version: 1, coinbase: false });
+    await db().insert(txOut).values([
+      { txId: 0, txHash: "nv1", valueType: "token", amount: "35", locktime: "0", scriptPublicKey: "addr_S", n: 0 }, // change
+      { txId: 0, txHash: "nv1", valueType: "token", amount: "3", locktime: "0", scriptPublicKey: "addr_R", n: 1 },  // sent
+    ]);
+    await db().insert(txIn).values({ txId: 0, txHash: "nv1", scriptSignature: {}, previousOutTxHash: "prev", previousOutTxN: 0 });
+    await db().insert(txInExpanded).values({ txId: 0, txHash: "nv1", scriptSignature: {}, previousOutTxHash: "prev", previousOutTxN: 0, outScriptPublicKey: "addr_S" });
+    try {
+      const res = await getTransactions(db(), { limit: 100, offset: 0, order: "desc" });
+      expect(res.transactions.find((t) => t.hash === "nv1")?.value).toBe("3");
+    } finally {
+      await db().delete(txInExpanded).where(eq(txInExpanded.txHash, "nv1"));
+      await db().delete(txIn).where(eq(txIn.txHash, "nv1"));
+      await db().delete(txOut).where(eq(txOut.txHash, "nv1"));
+      await db().delete(transaction).where(eq(transaction.hash, "nv1"));
+      await db().delete(block).where(eq(block.hash, "nvb"));
+    }
+  });
+
   it("counts non-coinbase transactions", async () => {
     expect(await getTransactionsCount(db())).toBe(2);
   });
