@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { ReactNode } from "react";
 import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
-import { TOKEN_DISPLAY_NAME } from "@explorer/config";
+import { TOKEN_DISPLAY_NAME, IS_TESTNET } from "@explorer/config";
 import { SiteHeader } from "./components/SiteHeader.js";
 import { SiteFooter } from "./components/SiteFooter.js";
 
@@ -25,7 +25,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: `${TOKEN_DISPLAY_NAME} Explorer`,
+  title: `${TOKEN_DISPLAY_NAME}${IS_TESTNET ? " Testnet" : ""} Explorer`,
   description: `Explore blocks, transactions, and addresses on ${TOKEN_DISPLAY_NAME}.`,
   icons: {
     icon: [

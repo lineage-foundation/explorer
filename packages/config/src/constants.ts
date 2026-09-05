@@ -2,6 +2,10 @@ export const TOKEN_TICKER = process.env.TOKEN_TICKER ?? "LNGX";
 export const TOKEN_DISPLAY_NAME = process.env.TOKEN_DISPLAY_NAME ?? "Lineage";
 export const NETWORK_DISPLAY_NAME = process.env.NETWORK_DISPLAY_NAME ?? "Lineage";
 
+// When true, the UI shows a prominent "Testnet" indicator. Set
+// NETWORK_IS_TESTNET=true on testnet deployments.
+export const IS_TESTNET = (process.env.NETWORK_IS_TESTNET ?? "false") === "true";
+
 // Base URL advertised in the OpenAPI `servers` list. Defaults to same-origin;
 // set to the public API origin (e.g. https://explorer.example) once deployed.
 export const PUBLIC_API_URL = process.env.PUBLIC_API_URL ?? "/";
