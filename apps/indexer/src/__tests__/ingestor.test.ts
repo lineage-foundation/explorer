@@ -129,6 +129,7 @@ it("does not wipe indexed data when the tip probe is momentarily inconclusive", 
     getBlockRange: (s: number, e: number) => (s === 3 && e === 3 ? Promise.resolve([]) : source.getBlockRange(s, e)),
     getTransactionsByHash: (h: string[]) => source.getTransactionsByHash(h),
     getCirculatingSupply: () => source.getCirculatingSupply(),
+    getTotalSupply: () => source.getTotalSupply(),
   };
   const res = await createIngestor({ db: db(), source: flaky, config: cfg(), logger: noopLogger }).runCycle();
   expect(res.caughtUp).toBe(true);
@@ -143,6 +144,7 @@ it("reports processedTo as the last block actually returned, not the requested t
     getBlockRange: (s: number, e: number) => source.getBlockRange(s, Math.min(e, 3)),
     getTransactionsByHash: (h: string[]) => source.getTransactionsByHash(h),
     getCirculatingSupply: () => source.getCirculatingSupply(),
+    getTotalSupply: () => source.getTotalSupply(),
   };
   const res = await createIngestor({ db: db(), source: short, config: cfg(), logger: noopLogger }).runCycle();
   expect(res.processedTo).toBe(3); // not the requested 5

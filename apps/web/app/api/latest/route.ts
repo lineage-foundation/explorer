@@ -17,6 +17,7 @@ export async function GET(): Promise<NextResponse> {
     getCirculatingSupply(db),
   ]);
   return NextResponse.json({
-    blocks, txs: transactions, blocksCount, txCount, circulatingSupply: supply.circulatingSupply,
+    blocks, txs: transactions, blocksCount, txCount,
+    circulatingSupply: supply.circulatingSupply, totalSupply: supply.totalSupply,
   });
 }

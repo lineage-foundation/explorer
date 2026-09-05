@@ -10,14 +10,18 @@ beforeAll(() => { handle = createDb(URL); });
 afterAll(async () => { await handle.close(); });
 beforeEach(async () => { await handle.db.delete(schema.circulatingSupply); });
 
-it("upserts the single circulating_supply row idempotently", async () => {
-  const source = new FakeSourceClient(); source.setSupply("12345");
+it("upserts circulating and total supply into a single row idempotently", async () => {
+  const source = new FakeSourceClient(); source.setSupply("12345"); source.setTotalSupply("360360000000000000");
   const cron = createSupplyCron({ db: handle.db, source, logger: noopLogger });
   await cron.runOnce();
-  expect((await getCirculatingSupply(handle.db)).circulatingSupply).toBe("12345");
+  let row = await getCirculatingSupply(handle.db);
+  expect(row.circulatingSupply).toBe("12345");
+  expect(row.totalSupply).toBe("360360000000000000"); // protocol total, not genesis
   source.setSupply("22222");
   await cron.runOnce();
-  expect((await getCirculatingSupply(handle.db)).circulatingSupply).toBe("22222");
+  row = await getCirculatingSupply(handle.db);
+  expect(row.circulatingSupply).toBe("22222");
+  expect(row.totalSupply).toBe("360360000000000000");
   expect(await handle.db.select().from(schema.circulatingSupply)).toHaveLength(1);
 });
 
@@ -30,6 +34,7 @@ it("skips an overlapping run while one is already in flight", async () => {
     getBlockRange: () => Promise.resolve([]),
     getTransactionsByHash: () => Promise.resolve([]),
     getCirculatingSupply: async () => { calls += 1; await gate; return "777"; },
+    getTotalSupply: async () => "5000",
   };
   const warn = vi.fn();
   const cron = createSupplyCron({ db: handle.db, source, logger: { info: () => {}, warn, error: () => {} } });

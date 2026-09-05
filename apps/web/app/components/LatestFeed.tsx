@@ -13,6 +13,7 @@ interface Snapshot {
   blocksCount: number;
   txCount: number;
   circulatingSupply: string;
+  totalSupply: string | null;
 }
 
 function reviveDates<T extends { timestamp: Date | null }>(
@@ -51,7 +52,12 @@ export function LatestFeed({ initial }: { initial: Snapshot }) {
 
   return (
     <div className="space-y-6">
-      <StatRow blocksCount={snap.blocksCount} txCount={snap.txCount} circulatingSupply={snap.circulatingSupply} />
+      <StatRow
+        blocksCount={snap.blocksCount}
+        txCount={snap.txCount}
+        circulatingSupply={snap.circulatingSupply}
+        totalSupply={snap.totalSupply}
+      />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section>
           <div className="mb-2 flex items-baseline justify-between">

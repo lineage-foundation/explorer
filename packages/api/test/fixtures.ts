@@ -33,7 +33,7 @@ export async function seedFixtures(db: Database): Promise<void> {
   await db.insert(txInExpanded).values([
     { txId: 3, txHash: "tx_2", scriptSignature: {}, previousOutTxHash: "tx_1", previousOutTxN: 0, outScriptPublicKey: "addr_1" },
   ]);
-  await db.insert(circulatingSupply).values([{ id: 1, circulatingSupply: "12345" }]);
+  await db.insert(circulatingSupply).values([{ id: 1, circulatingSupply: "12345", totalSupply: "50000" }]);
   await db.insert(coinsHistory).values([
     { address: "addr_1", date: new Date("2024-01-03T00:00:00Z"), outIds: [out1?.id] },
   ]);

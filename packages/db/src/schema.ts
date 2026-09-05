@@ -161,6 +161,9 @@ export const coinsHistory = pgTable(
 export const circulatingSupply = pgTable("circulating_supply", {
   id: integer("id").primaryKey(),
   circulatingSupply: numeric("circulatingSupply").notNull(),
+  // Protocol max total supply, sourced from the node's /v1/supply `total` (not
+  // the genesis issuance). Nullable until the supply cron first records it.
+  totalSupply: numeric("totalSupply"),
   createdAt: timestamp("createdAt", { withTimezone: false }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: false }).defaultNow().notNull(),
 });

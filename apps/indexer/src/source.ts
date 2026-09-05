@@ -5,4 +5,5 @@ export interface SourceClient {
   getBlockRange(start: number, end: number): Promise<[string, Record<"block", LineageBlock>][]>;
   getTransactionsByHash(hashes: string[]): Promise<[string, LineageTransaction][]>;
   getCirculatingSupply(): Promise<string>;
+  getTotalSupply(): Promise<string>;
 }

@@ -18,6 +18,7 @@ const snap = {
   blocksCount: 6,
   txCount: 1,
   circulatingSupply: "0",
+  totalSupply: null,
 };
 
 describe("LatestFeed", () => {

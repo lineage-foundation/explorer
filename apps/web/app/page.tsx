@@ -19,7 +19,8 @@ export default async function Home() {
   return (
     <LatestFeed
       initial={{
-        blocks, txs: transactions, blocksCount, txCount, circulatingSupply: supply.circulatingSupply,
+        blocks, txs: transactions, blocksCount, txCount,
+        circulatingSupply: supply.circulatingSupply, totalSupply: supply.totalSupply,
       }}
     />
   );

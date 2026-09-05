@@ -64,6 +64,7 @@ describe("worker end-to-end", () => {
       getBlockRange: (s: number, e: number) => base.getBlockRange(s, e),
       getTransactionsByHash: (h: string[]) => base.getTransactionsByHash(h),
       getCirculatingSupply: () => base.getCirculatingSupply(),
+      getTotalSupply: () => base.getTotalSupply(),
     };
     const config = loadConfig({
       DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", HEALTH_PORT: "",
@@ -96,6 +97,7 @@ describe("worker end-to-end", () => {
       getBlockRange: (s: number, e: number) => base.getBlockRange(s, e),
       getTransactionsByHash: (h: string[]) => base.getTransactionsByHash(h),
       getCirculatingSupply: () => base.getCirculatingSupply(),
+      getTotalSupply: () => base.getTotalSupply(),
     };
     const config = loadConfig({ DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", HEALTH_PORT: "", INDEXER_POLL_INTERVAL_MS: "5" });
     const worker = createWorker({ config, db: handle.db, sql: handle.sql, source, logger: noopLogger });

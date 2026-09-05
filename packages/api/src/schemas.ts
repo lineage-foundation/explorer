@@ -142,6 +142,8 @@ export const SupplySchema = z
   .object({
     circulating: z.string(),
     circulatingLngx: z.string(),
+    total: z.string().nullable(),
+    totalLngx: z.string().nullable(),
     ticker: z.string(),
   })
   .openapi("Supply");

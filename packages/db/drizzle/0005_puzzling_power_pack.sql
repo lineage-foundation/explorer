@@ -1,0 +1,1 @@
+ALTER TABLE "circulating_supply" ADD COLUMN IF NOT EXISTS "totalSupply" numeric;

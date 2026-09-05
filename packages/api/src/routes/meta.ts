@@ -12,17 +12,19 @@ export function registerMeta(app: OpenAPIHono, db: Database): void {
   app.openapi(
     createRoute({
       method: "get", path: "/api/v1/supply", tags: ["Chain"],
-      summary: "Circulating supply",
+      summary: "Circulating and total supply",
       responses: {
-        200: { content: { "application/json": { schema: SupplySchema } }, description: "Circulating supply" },
+        200: { content: { "application/json": { schema: SupplySchema } }, description: "Supply figures" },
       },
     }),
     async (c) => {
-      const { circulatingSupply } = await getCirculatingSupply(db);
+      const { circulatingSupply, totalSupply } = await getCirculatingSupply(db);
       c.header("Cache-Control", `public, s-maxage=${CACHE.list}`);
       return c.json({
         circulating: circulatingSupply,
         circulatingLngx: formatLngxPlain(circulatingSupply),
+        total: totalSupply,
+        totalLngx: totalSupply !== null ? formatLngxPlain(totalSupply) : null,
         ticker: TOKEN_TICKER,
       });
     },

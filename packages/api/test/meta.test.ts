@@ -14,10 +14,13 @@ describe("meta routes", () => {
   it("returns circulating supply with LNGX + ticker", async () => {
     const res = await app().request("/api/v1/supply");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { circulating: string; circulatingLngx: string; ticker: string };
-    expect(body).toMatchObject({ circulating: "12345", ticker: "LNGX" });
+    const body = (await res.json()) as {
+      circulating: string; circulatingLngx: string; total: string | null; totalLngx: string | null; ticker: string;
+    };
+    expect(body).toMatchObject({ circulating: "12345", total: "50000", ticker: "LNGX" });
     expect(typeof body.circulatingLngx).toBe("string");
     expect(body.circulatingLngx).not.toContain(",");
+    expect(typeof body.totalLngx).toBe("string"); // total present → formatted
   });
 
   it("returns chain status", async () => {

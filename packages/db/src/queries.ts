@@ -375,9 +375,11 @@ export async function getAccountTransactions(
   return { transactions: details, pagination: { total, limit, offset, hasMore: offset + limit < total } };
 }
 
-export async function getCirculatingSupply(db: Database): Promise<{ circulatingSupply: string }> {
+export async function getCirculatingSupply(
+  db: Database,
+): Promise<{ circulatingSupply: string; totalSupply: string | null }> {
   const [row] = await db.select().from(circulatingSupply).limit(1);
-  return { circulatingSupply: row?.circulatingSupply ?? "0" };
+  return { circulatingSupply: row?.circulatingSupply ?? "0", totalSupply: row?.totalSupply ?? null };
 }
 
 export async function getMaxBlockNum(db: Database): Promise<number | null> {

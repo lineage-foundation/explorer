@@ -19,14 +19,17 @@ export function createSupplyCron(deps: { db: Database; source: SourceClient; log
       }
       inFlight = true;
       try {
-        const value = await source.getCirculatingSupply();
+        const [circulating, total] = await Promise.all([
+          source.getCirculatingSupply(),
+          source.getTotalSupply(),
+        ]);
         await db.insert(schema.circulatingSupply)
-          .values({ id: 1, circulatingSupply: value })
+          .values({ id: 1, circulatingSupply: circulating, totalSupply: total })
           .onConflictDoUpdate({
             target: schema.circulatingSupply.id,
-            set: { circulatingSupply: value, updatedAt: sql`now()` },
+            set: { circulatingSupply: circulating, totalSupply: total, updatedAt: sql`now()` },
           });
-        logger.info({ event: "supply.updated", value }, "circulating supply updated");
+        logger.info({ event: "supply.updated", circulating, total }, "supply updated");
       } catch (err) {
         logger.error({ event: "supply.error", err: String(err) }, "supply update failed");
       } finally {

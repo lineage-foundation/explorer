@@ -56,6 +56,7 @@ export class FakeSourceClient implements SourceClient {
   private blocks = new Map<number, [string, LineageBlock]>();
   private txs = new Map<string, LineageTransaction>();
   private supply = "0";
+  private total = "0";
 
   addBlock(hash: string, block: LineageBlock): void {
     this.blocks.set(block.header.b_num, [hash, block]);
@@ -65,6 +66,9 @@ export class FakeSourceClient implements SourceClient {
   }
   setSupply(value: string): void {
     this.supply = value;
+  }
+  setTotalSupply(value: string): void {
+    this.total = value;
   }
 
   async getLatestBlock(): Promise<LineageBlock> {
@@ -89,5 +93,8 @@ export class FakeSourceClient implements SourceClient {
   }
   async getCirculatingSupply(): Promise<string> {
     return this.supply;
+  }
+  async getTotalSupply(): Promise<string> {
+    return this.total;
   }
 }
