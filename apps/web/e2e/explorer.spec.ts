@@ -53,9 +53,12 @@ test("transaction with an item output shows an item tag", async ({ page }) => {
 
 test("address shows balance and history", async ({ page }) => {
   await page.goto("/address/addrB");
-  await expect(page.getByText("Balance")).toBeVisible();
-  // Stat renders the value and unit with a space between them: "30 LNGX".
+  // Headline balance stat renders the value and unit with a space: "30 LNGX".
   await expect(page.getByText("30 LNGX")).toBeVisible();
+  // Transaction history table carries per-transaction Amount and running Balance
+  // columns ("Balance" also appears as the stat label, so scope to the header).
+  await expect(page.getByRole("columnheader", { name: "Amount" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Balance" })).toBeVisible();
 });
 
 test("unknown id 404s", async ({ page }) => {
