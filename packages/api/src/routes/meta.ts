@@ -4,10 +4,11 @@ import type { Database } from "@explorer/db";
 import {
   getCirculatingSupply, getMaxBlockNum, getBlocksCount, getTransactionsCount,
 } from "@explorer/db";
-import { formatLngxPlain, TOKEN_TICKER, NETWORK_DISPLAY_NAME, PUBLIC_API_URL } from "@explorer/config";
+import { formatLngxPlain, TOKEN_TICKER, NETWORK_DISPLAY_NAME } from "@explorer/config";
 import { SupplySchema, StatusSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
 import { SCALAR_LINEAGE_THEME } from "../scalar-theme.js";
+import { OPENAPI_INFO } from "../openapi-info.js";
 
 export function registerMeta(app: OpenAPIHono, db: Database): void {
   app.openapi(
@@ -48,15 +49,7 @@ export function registerMeta(app: OpenAPIHono, db: Database): void {
     },
   );
 
-  app.doc31("/api/v1/openapi.json", {
-    openapi: "3.1.0",
-    info: {
-      title: "Lineage Explorer API",
-      version: "1.0.0",
-      description: "Read-only public REST API for the Lineage block explorer.",
-    },
-    servers: [{ url: PUBLIC_API_URL }],
-  });
+  app.doc31("/api/v1/openapi.json", OPENAPI_INFO);
 
   app.get(
     "/api/v1/docs",
