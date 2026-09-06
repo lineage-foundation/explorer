@@ -56,9 +56,9 @@ describe("meta routes", () => {
     expect(doc.components.schemas).toHaveProperty("Problem");
   });
 
-  it("serves the Scalar docs page as HTML", async () => {
+  it("no longer serves the interactive console route", async () => {
+    // Docs live at the web app's /docs page; the Scalar console was removed.
     const res = await app().request("/api/v1/docs");
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.status).toBe(404);
   });
 });

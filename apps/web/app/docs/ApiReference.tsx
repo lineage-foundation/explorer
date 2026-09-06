@@ -29,7 +29,6 @@ export function ApiReference({ doc, baseUrl }: { doc: OpenApiDoc; baseUrl: strin
             <code className="font-mono text-xs text-link">{baseUrl}</code>
           </div>
           <a href="/api/v1/openapi.json" className="text-link hover:text-link-hover">OpenAPI spec ↗</a>
-          <a href="/api/v1/docs" className="text-link hover:text-link-hover">Interactive console ↗</a>
         </div>
         {IS_TESTNET && (
           <p className="mt-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-text-muted">

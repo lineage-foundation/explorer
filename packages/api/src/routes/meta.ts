@@ -1,5 +1,4 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
-import { apiReference } from "@scalar/hono-api-reference";
 import type { Database } from "@explorer/db";
 import {
   getCirculatingSupply, getMaxBlockNum, getBlocksCount, getTransactionsCount,
@@ -7,7 +6,6 @@ import {
 import { formatLngxPlain, TOKEN_TICKER, NETWORK_DISPLAY_NAME } from "@explorer/config";
 import { SupplySchema, StatusSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
-import { SCALAR_LINEAGE_THEME } from "../scalar-theme.js";
 import { OPENAPI_INFO } from "../openapi-info.js";
 
 export function registerMeta(app: OpenAPIHono, db: Database): void {
@@ -50,17 +48,4 @@ export function registerMeta(app: OpenAPIHono, db: Database): void {
   );
 
   app.doc31("/api/v1/openapi.json", OPENAPI_INFO);
-
-  app.get(
-    "/api/v1/docs",
-    apiReference({
-      spec: { url: "/api/v1/openapi.json" },
-      // Match the Lineage brand (lineage.foundation) and the explorer app.
-      theme: "none",
-      forceDarkModeState: "dark",
-      hideDarkModeToggle: true,
-      withDefaultFonts: false,
-      customCss: SCALAR_LINEAGE_THEME,
-    }),
-  );
 }
