@@ -15,6 +15,7 @@ export interface SchemaObject {
   default?: unknown;
   anyOf?: SchemaObject[];
   oneOf?: SchemaObject[];
+  allOf?: SchemaObject[];
 }
 
 export interface Parameter {
@@ -103,6 +104,25 @@ export function resolveRef(doc: OpenApiDoc, schema: SchemaObject | undefined): S
   return schema;
 }
 
+/**
+ * Resolve `$ref`s and flatten `allOf` composition (how zod-openapi renders
+ * `.extend()`ed schemas) into a single object schema by merging members'
+ * properties and required lists. Non-allOf schemas are returned as resolved.
+ */
+export function flatten(doc: OpenApiDoc, schema: SchemaObject | undefined): SchemaObject {
+  const resolved = resolveRef(doc, schema);
+  if (!resolved.allOf) return resolved;
+  const merged: SchemaObject = { type: "object", properties: {}, required: [] };
+  const members = [...resolved.allOf, resolved]; // include the allOf schema's own props
+  for (const member of members) {
+    const f = member === resolved ? { properties: resolved.properties, required: resolved.required, description: resolved.description } : flatten(doc, member);
+    if (f.properties) merged.properties = { ...merged.properties, ...f.properties };
+    if (f.required) merged.required = [...(merged.required ?? []), ...f.required];
+    if (f.description && !merged.description) merged.description = f.description;
+  }
+  return merged;
+}
+
 /** The display name of a $ref target (e.g. "TransactionSummary"), else null. */
 export function refName(schema: SchemaObject | undefined): string | null {
   if (!schema?.$ref) return null;
@@ -161,7 +181,7 @@ export function fieldRows(
   depth = 0,
   maxDepth = 3,
 ): FieldRow[] {
-  const resolved = resolveRef(doc, schema);
+  const resolved = flatten(doc, schema);
   const rows: FieldRow[] = [];
 
   const object = resolved.type === "object" || resolved.properties;
@@ -173,15 +193,15 @@ export function fieldRows(
         name,
         type: typeLabel(doc, prop),
         required: required.has(name),
-        description: prop.description ?? resolveRef(doc, prop).description,
+        description: prop.description ?? flatten(doc, prop).description,
         depth,
       });
       if (depth + 1 >= maxDepth) continue;
-      const resolvedProp = resolveRef(doc, prop);
+      const resolvedProp = flatten(doc, prop);
       if (resolvedProp.type === "object" || resolvedProp.properties) {
         rows.push(...fieldRows(doc, resolvedProp, depth + 1, maxDepth));
       } else if (resolvedProp.type === "array" && resolvedProp.items) {
-        const item = resolveRef(doc, resolvedProp.items);
+        const item = flatten(doc, resolvedProp.items);
         if (item.type === "object" || item.properties) {
           rows.push(...fieldRows(doc, item, depth + 1, maxDepth));
         }
@@ -209,7 +229,7 @@ export function successSchema(doc: OpenApiDoc, op: Operation): { status: string;
 /** Build a representative example value from a schema, honouring `example`s. */
 export function buildExample(doc: OpenApiDoc, schema: SchemaObject | undefined, depth = 0): unknown {
   if (depth > 6) return null;
-  const resolved = resolveRef(doc, schema);
+  const resolved = flatten(doc, schema);
   if (resolved.example !== undefined) return resolved.example;
   if (resolved.default !== undefined) return resolved.default;
   if (resolved.enum && resolved.enum.length > 0) return resolved.enum[0];

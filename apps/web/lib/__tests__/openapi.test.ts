@@ -48,6 +48,14 @@ const doc: OpenApiDoc = {
         },
       },
       Address: { type: "object", required: ["address"], properties: { address: { type: "string", example: "addr_1" }, balance: { type: "string" } } },
+      Transaction: { type: "object", required: ["hash"], properties: { hash: { type: "string", example: "tx_2" }, version: { type: "integer" } } },
+      // How zod-openapi renders `TransactionSchema.extend({...})`: allOf.
+      AddressTransaction: {
+        allOf: [
+          { $ref: "#/components/schemas/Transaction" },
+          { type: "object", required: ["balanceAfter"], properties: { blockNum: { type: "integer" }, balanceAfter: { type: "string" } } },
+        ],
+      },
     },
   },
 };
@@ -90,6 +98,22 @@ describe("fieldRows", () => {
     expect(num?.depth).toBe(1); // nested inside data's item
     expect(num?.required).toBe(true);
     expect(rows.find((r) => r.name === "total")?.depth).toBe(1); // nested inside pagination
+  });
+});
+
+describe("fieldRows with allOf", () => {
+  it("merges allOf members (extended schemas) into one field set", () => {
+    const rows = fieldRows(doc, { $ref: "#/components/schemas/AddressTransaction" });
+    const names = rows.map((r) => r.name);
+    expect(names).toContain("hash"); // from the base Transaction
+    expect(names).toContain("balanceAfter"); // from the extension
+    expect(rows.find((r) => r.name === "balanceAfter")?.required).toBe(true);
+    expect(rows.find((r) => r.name === "hash")?.required).toBe(true);
+  });
+  it("includes allOf members in generated examples", () => {
+    const ex = buildExample(doc, { $ref: "#/components/schemas/AddressTransaction" }) as Record<string, unknown>;
+    expect(ex).toHaveProperty("hash", "tx_2");
+    expect(ex).toHaveProperty("balanceAfter", "string");
   });
 });
 
