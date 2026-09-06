@@ -183,12 +183,14 @@ describe("read queries", () => {
     expect((await getCirculatingSupply(db())).circulatingSupply).toBe("12345");
   });
 
-  it("returns an account's transactions joined via address outputs", async () => {
+  it("returns an account's transactions including both receipts and spends", async () => {
+    // tx_1 pays addr_1 (a receipt); tx_2 spends addr_1's output (a pure spend —
+    // its change, if any, went elsewhere and nothing returned to addr_1). Both
+    // belong to the ledger; matching outputs alone would drop the spend. Newest
+    // block first.
     const res = await getAccountTransactions(db(), "addr_1", { limit: 25, offset: 0 });
-    expect(res.transactions).toHaveLength(1);
-    expect(res.transactions[0]?.hash).toBe("tx_1");
-    expect(res.pagination.total).toBe(1);
-    expect(res.transactions[0]?.outs[0]?.amount).toBe("500");
+    expect(res.transactions.map((t) => t.hash)).toEqual(["tx_2", "tx_1"]);
+    expect(res.pagination.total).toBe(2);
   });
 
   it("returns no transactions for an unknown address", async () => {
@@ -200,7 +202,45 @@ describe("read queries", () => {
   it("paginates an account's transactions", async () => {
     const res = await getAccountTransactions(db(), "addr_1", { limit: 1, offset: 0 });
     expect(res.transactions).toHaveLength(1);
-    expect(res.pagination.hasMore).toBe(false);
+    expect(res.pagination.hasMore).toBe(true); // addr_1 has 2 (a receipt and a spend)
+  });
+
+  it("reports a running balance after each transaction from coins_history", async () => {
+    // addr_rb receives 300 in block 10, then spends it all in block 11 (→ 0).
+    await db().insert(block).values([
+      { version: 1, num: 10, hash: "rb_b10", timestamp: new Date("2024-07-01T00:00:00Z"), nbTx: 1 },
+      { version: 1, num: 11, hash: "rb_b11", timestamp: new Date("2024-07-02T00:00:00Z"), nbTx: 1 },
+    ]);
+    await db().insert(transaction).values([
+      { hash: "rb_recv", blockHash: "rb_b10", version: 1, coinbase: false },
+      { hash: "rb_spend", blockHash: "rb_b11", version: 1, coinbase: false },
+    ]);
+    const [outRow] = await db().insert(txOut).values(
+      { txId: 0, txHash: "rb_recv", valueType: "token", amount: "300", locktime: "0", scriptPublicKey: "addr_rb", n: 0 },
+    ).returning({ id: txOut.id });
+    // rb_spend consumes addr_rb's output; the resolved input owner is addr_rb.
+    await db().insert(txIn).values({ txId: 0, txHash: "rb_spend", scriptSignature: {}, previousOutTxHash: "rb_recv", previousOutTxN: 0 });
+    await db().insert(txInExpanded).values({ txId: 0, txHash: "rb_spend", scriptSignature: {}, previousOutTxHash: "rb_recv", previousOutTxN: 0, outScriptPublicKey: "addr_rb" });
+    // Snapshots: after block 10 holds [outRow] (300); after block 11 holds [] (0).
+    await db().insert(coinsHistory).values([
+      { address: "addr_rb", date: new Date("2024-07-01T00:00:00Z"), blockNum: 10, outIds: [outRow!.id] },
+      { address: "addr_rb", date: new Date("2024-07-02T00:00:00Z"), blockNum: 11, outIds: [] },
+    ]);
+    try {
+      const res = await getAccountTransactions(db(), "addr_rb", { limit: 25, offset: 0 });
+      // Newest first: the spend leaves 0, the earlier receipt left 300.
+      expect(res.transactions.map((t) => [t.hash, t.balanceAfter])).toEqual([
+        ["rb_spend", "0"],
+        ["rb_recv", "300"],
+      ]);
+    } finally {
+      await db().delete(txInExpanded).where(eq(txInExpanded.txHash, "rb_spend"));
+      await db().delete(txIn).where(eq(txIn.txHash, "rb_spend"));
+      await db().delete(txOut).where(eq(txOut.txHash, "rb_recv"));
+      await db().delete(coinsHistory).where(eq(coinsHistory.address, "addr_rb"));
+      await db().delete(transaction).where(inArray(transaction.hash, ["rb_recv", "rb_spend"]));
+      await db().delete(block).where(inArray(block.hash, ["rb_b10", "rb_b11"]));
+    }
   });
 
   it("includes coinbase (block-reward) transactions in an address's history", async () => {

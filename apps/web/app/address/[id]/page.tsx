@@ -42,7 +42,7 @@ export default async function AddressPage({
           : (
             <>
               <Table>
-                <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Amount</TH><TH>Age</TH></TR></THead>
+                <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Amount</TH><TH>Balance</TH><TH>Age</TH></TR></THead>
                 <TBody>
                   {transactions.map((t) => {
                     // Net for THIS address: what it received minus what it spent.
@@ -65,6 +65,7 @@ export default async function AddressPage({
                             {net === 0n ? "—" : `${net > 0n ? "+" : "−"}${formatLngx(abs, 2)} ${TOKEN_TICKER}`}
                           </Mono>
                         </TD>
+                        <TD><Mono className="text-text-muted">{formatLngx(t.balanceAfter, 2)}</Mono></TD>
                         <TD><span className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
                       </TR>
                     );

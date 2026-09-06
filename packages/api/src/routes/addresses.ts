@@ -1,10 +1,19 @@
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
-import type { Database } from "@explorer/db";
+import type { AccountTx, Database } from "@explorer/db";
 import { getAccountBalance, getAccountTransactions } from "@explorer/db";
 import { formatLngxPlain } from "@explorer/config";
-import { AccountTxQuery, AddressSchema, TransactionSchema, listSchema } from "../schemas.js";
+import { AccountTxQuery, AddressSchema, AddressTransactionSchema, listSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
 import { serializeTransaction } from "./transactions.js";
+
+function serializeAccountTransaction(t: AccountTx) {
+  return {
+    ...serializeTransaction(t),
+    blockNum: t.blockNum,
+    balanceAfter: t.balanceAfter,
+    balanceAfterLngx: formatLngxPlain(t.balanceAfter),
+  };
+}
 
 const addressParam = z.object({
   address: z.string().min(1).max(128).openapi({ param: { name: "address", in: "path" }, example: "addr_1" }),
@@ -34,7 +43,7 @@ export function registerAddresses(app: OpenAPIHono, db: Database): void {
       summary: "List an address's transactions",
       request: { params: addressParam, query: AccountTxQuery },
       responses: {
-        200: { content: { "application/json": { schema: listSchema(TransactionSchema, "AddressTransactionList") } }, description: "A page of the address's transactions" },
+        200: { content: { "application/json": { schema: listSchema(AddressTransactionSchema, "AddressTransactionList") } }, description: "A page of the address's transactions" },
       },
     }),
     async (c) => {
@@ -43,7 +52,7 @@ export function registerAddresses(app: OpenAPIHono, db: Database): void {
       const { transactions, pagination } = await getAccountTransactions(db, address, { limit, offset });
       c.header("Cache-Control", `public, s-maxage=${CACHE.list}`);
       return c.json({
-        data: transactions.map(serializeTransaction),
+        data: transactions.map(serializeAccountTransaction),
         pagination: { ...pagination, hasMore: pagination.hasMore ?? false },
       });
     },

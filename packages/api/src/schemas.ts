@@ -114,6 +114,12 @@ export const TransactionSchema = z
   })
   .openapi("Transaction");
 
+export const AddressTransactionSchema = TransactionSchema.extend({
+  blockNum: z.number().int(),
+  balanceAfter: z.string(),
+  balanceAfterLngx: z.string(),
+}).openapi("AddressTransaction");
+
 export const AddressSchema = z
   .object({
     address: z.string(),

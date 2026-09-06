@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, like, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, like, lte, sql } from "drizzle-orm";
 import BigNumber from "bignumber.js";
 import type { Database } from "./client.js";
 import {
@@ -340,44 +340,103 @@ export async function getAccountBalance(db: Database, address: string): Promise<
   return { balance: balance.toFixed(0) };
 }
 
+export interface AccountTx extends TxDetail {
+  blockNum: number;
+  // The address's token balance immediately after this transaction's block, in
+  // raw units — a running ledger balance for the address page.
+  balanceAfter: string;
+}
+
 export async function getAccountTransactions(
   db: Database,
   address: string,
   opts: { limit?: number; offset?: number },
-): Promise<{ transactions: TxDetail[]; pagination: Pagination }> {
+): Promise<{ transactions: AccountTx[]; pagination: Pagination }> {
   const limit = clampLimit(opts.limit ?? 25);
   const offset = clampOffset(opts.offset ?? 0);
-  // Match transactions that pay this address via any output. The tx_out join
-  // alone is sufficient; a tx_in join would additionally require the tx to have
-  // inputs, silently excluding coinbase (mining-reward) transactions, which have
-  // none.
+  // A transaction belongs to the address's ledger if the address owns any
+  // output (a receipt or change) OR any spent input (tx_in_expanded resolves an
+  // input to its owning address). Matching outputs alone drops pure spends —
+  // where the change goes to a fresh address and nothing returns to the sender —
+  // which would leave the page unable to explain a balance that fell to zero.
+  // EXISTS (not a join) keeps one row per transaction, so no DISTINCT is needed.
+  const belongs = sql`(
+    exists (select 1 from ${txOut} o where o."txHash" = t.hash and o."scriptPublicKey" = ${address})
+    or exists (select 1 from ${txInExpanded} e where e."txHash" = t.hash and e."outScriptPublicKey" = ${address})
+  )`;
   const totalRows = await db.execute<{ total: number }>(sql`
-    select count(*)::int as total from (
-      select distinct t.hash, b.num
-      from ${transaction} t
-      inner join ${block} b on b.hash = t."blockHash"
-      inner join ${txOut} tout on t.hash = tout."txHash"
-      where tout."scriptPublicKey" = ${address}
-    ) temp
+    select count(*)::int as total from ${transaction} t where ${belongs}
   `);
   const total = totalRows[0]?.total ?? 0;
   if (!total) {
     return { transactions: [], pagination: { total: 0, limit, offset, hasMore: false } };
   }
-  // t.id is a unique tiebreaker so paging over rows sharing a block number is
-  // stable; it must appear in the select list to be usable by SELECT DISTINCT's
-  // ORDER BY.
-  const hashRows = await db.execute<{ hash: string }>(sql`
-    select distinct t.id, t.hash, b.num
+  // t.id breaks ties between transactions sharing a block number so offset
+  // paging stays stable (block.num alone is not unique per tx).
+  const hashRows = await db.execute<{ hash: string; num: number }>(sql`
+    select t.hash, b.num
     from ${transaction} t
     inner join ${block} b on b.hash = t."blockHash"
-    inner join ${txOut} tout on t.hash = tout."txHash"
-    where tout."scriptPublicKey" = ${address}
+    where ${belongs}
     order by b.num desc, t.id desc
     limit ${limit} offset ${offset}
   `);
-  const details = await loadTxDetails(db, hashRows.map((r) => r.hash));
-  return { transactions: details, pagination: { total, limit, offset, hasMore: offset + limit < total } };
+  const [details, balances] = await Promise.all([
+    loadTxDetails(db, hashRows.map((r) => r.hash)),
+    runningBalances(db, address, hashRows.map((r) => r.num)),
+  ]);
+  const blockByHash = new Map(hashRows.map((r) => [r.hash, r.num]));
+  const transactions = details.map((d) => {
+    const blockNum = blockByHash.get(d.hash) ?? 0;
+    return { ...d, blockNum, balanceAfter: balances.get(blockNum) ?? "0" };
+  });
+  return { transactions, pagination: { total, limit, offset, hasMore: offset + limit < total } };
+}
+
+/**
+ * The address's token balance immediately after each given block number, in raw
+ * units. For each block it values the latest coins_history snapshot at or before
+ * that block: an item-only transaction leaves the token balance unchanged, so
+ * its block simply carries the prior snapshot forward. Snapshots predating the
+ * block_num column (legacy NULL) are ignored — such an address needs a resync
+ * (see deleteFromHeight) for an accurate running balance.
+ */
+async function runningBalances(
+  db: Database,
+  address: string,
+  blockNums: number[],
+): Promise<Map<number, string>> {
+  const wanted = [...new Set(blockNums)];
+  if (wanted.length === 0) return new Map();
+  const maxBlock = Math.max(...wanted);
+  const snaps = await db
+    .select({ blockNum: coinsHistory.blockNum, outIds: coinsHistory.outIds })
+    .from(coinsHistory)
+    .where(and(
+      eq(coinsHistory.address, address),
+      isNotNull(coinsHistory.blockNum),
+      lte(coinsHistory.blockNum, maxBlock),
+    ))
+    .orderBy(asc(coinsHistory.blockNum), asc(coinsHistory.id));
+  // Value every referenced output once, then sum per snapshot from that map.
+  const allIds = [...new Set(snaps.flatMap((s) => (s.outIds as number[] | null) ?? []))];
+  const rows = allIds.length
+    ? await db.select({ id: txOut.id, amount: txOut.amount }).from(txOut).where(inArray(txOut.id, allIds))
+    : [];
+  const amountById = new Map(rows.map((r) => [r.id, r.amount ?? "0"]));
+  const balanceOf = (outIds: number[]): string =>
+    outIds.reduce((acc, id) => acc.plus(new BigNumber(amountById.get(id) ?? "0")), new BigNumber(0)).toFixed(0);
+  const result = new Map<number, string>();
+  for (const b of wanted) {
+    // snaps ascends by block; the last snapshot with blockNum <= b applies.
+    let chosen: number[] | null = null;
+    for (const s of snaps) {
+      if (s.blockNum !== null && s.blockNum <= b) chosen = (s.outIds as number[] | null) ?? [];
+      else break;
+    }
+    result.set(b, chosen ? balanceOf(chosen) : "0");
+  }
+  return result;
 }
 
 export async function getCirculatingSupply(

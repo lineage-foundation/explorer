@@ -27,11 +27,18 @@ describe("addresses routes", () => {
     expect(body).toMatchObject({ address: "nobody", balance: "0" });
   });
 
-  it("lists an address's transactions", async () => {
+  it("lists an address's transactions (receipts and spends) with a running balance", async () => {
     const res = await app().request("/api/v1/addresses/addr_1/transactions");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { data: { hash: string }[]; pagination: { total: number } };
-    expect(body.data[0]?.hash).toBe("tx_1");
-    expect(body.pagination.total).toBe(1);
+    const body = (await res.json()) as {
+      data: { hash: string; blockNum: number; balanceAfter: string; balanceAfterLngx: string }[];
+      pagination: { total: number };
+    };
+    // tx_1 pays addr_1; tx_2 spends addr_1's output. Both appear, newest first.
+    expect(body.data.map((t) => t.hash)).toEqual(["tx_2", "tx_1"]);
+    expect(body.pagination.total).toBe(2);
+    expect(typeof body.data[0]?.balanceAfter).toBe("string");
+    expect(typeof body.data[0]?.balanceAfterLngx).toBe("string");
+    expect(body.data[0]?.blockNum).toBe(2);
   });
 });
