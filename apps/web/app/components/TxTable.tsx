@@ -16,7 +16,7 @@ export function TxTable({ txs }: { txs: TxListItem[] }) {
         <col style={{ width: "15%" }} />
       </colgroup>
       <THead>
-        <TR><TH>Transaction</TH><TH>Block</TH><TH>Value</TH><TH>Type</TH><TH>Age</TH></TR>
+        <TR><TH>Transaction</TH><TH>Block</TH><TH>Total out</TH><TH>Type</TH><TH>Age</TH></TR>
       </THead>
       <TBody>
         {txs.map((t) => {

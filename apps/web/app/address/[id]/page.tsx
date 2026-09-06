@@ -8,6 +8,7 @@ import { getDb } from "../../../lib/db.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination, parsePage } from "../../components/Pagination.js";
 import { formatLngx, relativeTime, truncateHash } from "../../../lib/format.js";
+import { netForAddress } from "../../../lib/tx.js";
 
 export const revalidate = 20;
 const PAGE_SIZE = 25;
@@ -41,23 +42,33 @@ export default async function AddressPage({
           : (
             <>
               <Table>
-                <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Age</TH></TR></THead>
+                <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Amount</TH><TH>Age</TH></TR></THead>
                 <TBody>
-                  {transactions.map((t) => (
-                    <TR key={t.hash}>
-                      <TD>
-                        <Link href={`/transaction/${t.hash}`} className="text-link hover:text-link-hover">
-                          <Mono>{truncateHash(t.hash)}</Mono>
-                        </Link>
-                      </TD>
-                      <TD>
-                        <Link href={`/block/${t.blockHash}`} className="text-link hover:text-link-hover">
-                          <Mono>{truncateHash(t.blockHash, 6, 4)}</Mono>
-                        </Link>
-                      </TD>
-                      <TD><span className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
-                    </TR>
-                  ))}
+                  {transactions.map((t) => {
+                    // Net for THIS address: what it received minus what it spent.
+                    const net = netForAddress(t, id);
+                    const abs = (net < 0n ? -net : net).toString();
+                    return (
+                      <TR key={t.hash}>
+                        <TD>
+                          <Link href={`/transaction/${t.hash}`} className="text-link hover:text-link-hover">
+                            <Mono>{truncateHash(t.hash)}</Mono>
+                          </Link>
+                        </TD>
+                        <TD>
+                          <Link href={`/block/${t.blockHash}`} className="text-link hover:text-link-hover">
+                            <Mono>{truncateHash(t.blockHash, 6, 4)}</Mono>
+                          </Link>
+                        </TD>
+                        <TD>
+                          <Mono className={net > 0n ? "text-accent" : net < 0n ? "text-text-muted" : "text-text-subtle"}>
+                            {net === 0n ? "—" : `${net > 0n ? "+" : "−"}${formatLngx(abs, 2)} ${TOKEN_TICKER}`}
+                          </Mono>
+                        </TD>
+                        <TD><span className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
+                      </TR>
+                    );
+                  })}
                 </TBody>
               </Table>
               <Pagination page={page} hasMore={pagination.hasMore ?? false} basePath={`/address/${id}`} />
