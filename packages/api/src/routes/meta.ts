@@ -7,6 +7,7 @@ import {
 import { formatLngxPlain, TOKEN_TICKER, NETWORK_DISPLAY_NAME, PUBLIC_API_URL } from "@explorer/config";
 import { SupplySchema, StatusSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
+import { SCALAR_LINEAGE_THEME } from "../scalar-theme.js";
 
 export function registerMeta(app: OpenAPIHono, db: Database): void {
   app.openapi(
@@ -57,5 +58,16 @@ export function registerMeta(app: OpenAPIHono, db: Database): void {
     servers: [{ url: PUBLIC_API_URL }],
   });
 
-  app.get("/api/v1/docs", apiReference({ spec: { url: "/api/v1/openapi.json" } }));
+  app.get(
+    "/api/v1/docs",
+    apiReference({
+      spec: { url: "/api/v1/openapi.json" },
+      // Match the Lineage brand (lineage.foundation) and the explorer app.
+      theme: "none",
+      forceDarkModeState: "dark",
+      hideDarkModeToggle: true,
+      withDefaultFonts: false,
+      customCss: SCALAR_LINEAGE_THEME,
+    }),
+  );
 }
