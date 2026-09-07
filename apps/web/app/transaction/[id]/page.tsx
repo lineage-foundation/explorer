@@ -4,6 +4,7 @@ import { getDb } from "../../../lib/db.js";
 import { getTransactionByHash, getBlockByHashOrNumber, getMaxBlockNum } from "@explorer/db";
 import { PageHeader } from "../../components/PageHeader.js";
 import { InputsOutputs } from "../../components/InputsOutputs.js";
+import { JsonBlock } from "../../components/JsonBlock.js";
 import { Card, Pill, CopyButton } from "@explorer/ui";
 import {
   absoluteTime, relativeTime, truncateHash, txTypeLabel, confirmations,
@@ -52,6 +53,7 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
         </div>
       </Card>
       <InputsOutputs tx={tx} coinbase={coinbase} />
+      <JsonBlock title="Raw transaction" data={tx} />
     </div>
   );
 }

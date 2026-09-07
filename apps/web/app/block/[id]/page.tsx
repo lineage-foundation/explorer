@@ -7,6 +7,8 @@ import {
 } from "@explorer/ui";
 import { getDb } from "../../../lib/db.js";
 import { PageHeader } from "../../components/PageHeader.js";
+import { JsonBlock } from "../../components/JsonBlock.js";
+import { decodeUnicorn } from "../../../lib/detail.js";
 import {
   absoluteTime, relativeTime, truncateHash, txTypeLabel, formatLngx, confirmations,
 } from "../../../lib/format.js";
@@ -37,6 +39,7 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
     getMaxBlockNum(db),
   ]);
   const txs = txsRes.transactions;
+  const unicorn = decodeUnicorn(block.seed);
 
   return (
     <div className="space-y-6">
@@ -93,6 +96,12 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
               )
               : "—"}
           </Field>
+          {unicorn && (
+            <>
+              <Field label="Unicorn seed">{unicorn.seed || "—"}</Field>
+              <Field label="Unicorn witness">{unicorn.witness || "—"}</Field>
+            </>
+          )}
         </div>
       </Card>
 
@@ -121,6 +130,8 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
             </Table>
           )}
       </section>
+
+      <JsonBlock title="Raw block" data={block} />
     </div>
   );
 }

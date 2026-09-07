@@ -2,11 +2,31 @@ import Link from "next/link";
 import type { TxDetail } from "@explorer/db";
 import { Mono, Tag } from "@explorer/ui";
 import { formatLngx, truncateHash } from "../../lib/format.js";
+import { scriptStack } from "../../lib/detail.js";
 import { TOKEN_TICKER } from "@explorer/config";
 
 export function sumAmounts(values: (string | null)[]): string {
   const total = values.reduce((acc, v) => acc + (v ? BigInt(v) : 0n), 0n);
   return formatLngx(total.toString());
+}
+
+function ScriptSig({ sig }: { sig: unknown }) {
+  const items = scriptStack(sig);
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {items.map((it, i) => (
+        <span
+          key={i}
+          title={`${it.type}: ${it.value}`}
+          className="rounded border border-border bg-surface px-1 py-0.5 font-mono text-[0.55rem] text-text-subtle"
+        >
+          <span className="text-text-muted">{it.type}</span>
+          {it.value ? ` ${it.value.length > 20 ? `${it.value.slice(0, 20)}…` : it.value}` : ""}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolean }) {
@@ -29,16 +49,19 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
         {coinbase || tx.ins.length === 0
           ? <div className="px-2 py-1.5 text-sm text-text-subtle">No inputs (coinbase / newly minted)</div>
           : tx.ins.map((i, idx) => (
-            <div key={idx} className="mb-1.5 flex justify-between gap-3 rounded bg-bg-raised px-2 py-2 last:mb-0">
-              <div>
-                {i.fromAddress
-                  ? <Link href={`/address/${i.fromAddress}`} className="font-mono text-xs text-link hover:text-link-hover">{truncateHash(i.fromAddress, 8, 6)}</Link>
-                  : <span className="font-mono text-xs text-text-subtle">unresolved</span>}
-                <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
-                  {i.previousOutTxHash ? `spends ${truncateHash(i.previousOutTxHash, 6, 4)} : ${i.previousOutTxN ?? "?"}` : "coinbase"}
+            <div key={idx} className="mb-1.5 rounded bg-bg-raised px-2 py-2 last:mb-0">
+              <div className="flex justify-between gap-3">
+                <div>
+                  {i.fromAddress
+                    ? <Link href={`/address/${i.fromAddress}`} className="font-mono text-xs text-link hover:text-link-hover">{truncateHash(i.fromAddress, 8, 6)}</Link>
+                    : <span className="font-mono text-xs text-text-subtle">unresolved</span>}
+                  <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
+                    {i.previousOutTxHash ? `spends ${truncateHash(i.previousOutTxHash, 6, 4)} : ${i.previousOutTxN ?? "?"}` : "coinbase"}
+                  </div>
                 </div>
+                <Mono className="text-xs">{i.amount ? `${formatLngx(i.amount)} ${TOKEN_TICKER}` : "—"}</Mono>
               </div>
-              <Mono className="text-xs">{i.amount ? `${formatLngx(i.amount)} ${TOKEN_TICKER}` : "—"}</Mono>
+              <ScriptSig sig={i.scriptSignature} />
             </div>
           ))}
       </div>
@@ -53,18 +76,35 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
       <div className="rounded-md border border-border bg-surface p-2">
         {tx.outs.map((o) => (
           <div key={o.n} className="mb-1.5 flex justify-between gap-3 rounded bg-bg-raised px-2 py-2 last:mb-0">
-            <div>
+            <div className="min-w-0">
               {o.scriptPublicKey
                 ? <Link href={`/address/${o.scriptPublicKey}`} className="font-mono text-xs text-link hover:text-link-hover">{truncateHash(o.scriptPublicKey, 8, 6)}</Link>
                 : <span className="font-mono text-xs text-text-subtle">—</span>}
               <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
                 index {o.n}
-                {o.valueType === "item" && o.genesisHash ? ` · genesis ${truncateHash(o.genesisHash, 6, 4)}` : ""}
                 {o.valueType === "token" && o.scriptPublicKey && inputAddrs.has(o.scriptPublicKey) ? " · change" : ""}
               </div>
+              {o.valueType === "item" && o.genesisHash && (
+                <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
+                  genesis{" "}
+                  <Link href={`/transaction/${o.genesisHash}`} className="text-link hover:text-link-hover">
+                    {truncateHash(o.genesisHash, 8, 6)}
+                  </Link>
+                </div>
+              )}
+              {o.valueType === "item" && o.itemMetadata && (
+                <div className="mt-0.5 break-all font-mono text-[0.6rem] text-text-muted">
+                  metadata: {o.itemMetadata}
+                </div>
+              )}
             </div>
             {o.valueType === "item"
-              ? <Tag>item</Tag>
+              ? (
+                <div className="shrink-0 text-right">
+                  <Tag>item</Tag>
+                  {o.amount && <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">× {o.amount}</div>}
+                </div>
+              )
               : <Mono className="text-xs">{formatLngx(o.amount)} {TOKEN_TICKER}</Mono>}
           </div>
         ))}

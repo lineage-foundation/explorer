@@ -9,6 +9,7 @@ import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination, parsePage } from "../../components/Pagination.js";
 import { formatLngx, relativeTime, truncateHash } from "../../../lib/format.js";
 import { netForAddress } from "../../../lib/tx.js";
+import { groupDigits } from "../../../lib/detail.js";
 
 export const revalidate = 20;
 const PAGE_SIZE = 25;
@@ -28,7 +29,10 @@ export default async function AddressPage({
     <div className="space-y-6">
       <PageHeader eyebrow="Address" title={truncateHash(id, 10, 8)} />
       <div className="flex flex-wrap items-center gap-3">
-        <div className="max-w-md flex-1"><Stat label="Balance" value={formatLngx(balance)} unit={TOKEN_TICKER} /></div>
+        <div className="max-w-md flex-1">
+          <Stat label="Balance" value={formatLngx(balance)} unit={TOKEN_TICKER} />
+          <div className="mt-1 font-mono text-[0.6rem] text-text-subtle">{groupDigits(balance)} fractionated</div>
+        </div>
         <span className="break-all font-mono text-xs text-text-subtle">
           {id}
           {" "}
