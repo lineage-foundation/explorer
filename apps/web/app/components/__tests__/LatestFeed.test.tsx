@@ -13,7 +13,7 @@ const snap = {
     { version: 1, num: 5, hash: "b5", previousHash: "b4", timestamp: new Date(), nbTx: 2, reward: "72072000", miner: "addrA" },
   ],
   txs: [
-    { hash: "tx_abcdef0123", blockHash: "b5", blockNum: 5, version: 1, timestamp: new Date(), txType: "token", value: "72072000" },
+    { hash: "tx_abcdef0123", blockHash: "b5", blockNum: 5, version: 1, timestamp: new Date(), txType: "token", value: "72072000", druid: null },
   ],
   blocksCount: 6,
   txCount: 1,

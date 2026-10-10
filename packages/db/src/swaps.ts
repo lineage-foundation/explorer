@@ -1,7 +1,10 @@
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "./client.js";
-import { block, transaction } from "./schema.js";
-import { loadTxDetails, type Pagination, type TxDetail } from "./queries.js";
+import { block, transaction, txInExpanded, txOut } from "./schema.js";
+import {
+  getTxListItems, loadTxDetails, runningBalances,
+  type AccountTx, type Order, type Pagination, type TxDetail, type TxListItem,
+} from "./queries.js";
 
 /**
  * Two-way (DRUID) swaps.
@@ -235,4 +238,125 @@ export async function getSwaps(
     swaps: page.flatMap((r) => loaded.get(r.druid)?.swap ?? []),
     pagination: { total, limit, offset, hasMore: offset + limit < total },
   };
+}
+
+// A list row is either an ordinary transaction or a whole swap. The union is
+// flat (both arms carry top-level `blockNum` and `timestamp`) so rows survive a
+// JSON round trip to the client the same way plain transaction rows do.
+export type ActivityItem = ({ kind: "tx" } & TxListItem) | ({ kind: "swap" } & Swap);
+
+// Transactions are grouped so a swap's halves form one row: by DRUID when there
+// is one, otherwise each transaction is its own group.
+const GROUP_KEY = sql`coalesce(t.druid, t.hash)`;
+
+interface GroupRow extends Record<string, unknown> {
+  druid: string | null;
+  hashes: string[];
+  num: number;
+}
+
+/**
+ * The transaction list as people should read it: one row per ordinary
+ * (non-coinbase) transaction and one row per swap. Grouping happens in SQL so a
+ * swap is never split across a page boundary and `pagination.total` counts rows.
+ */
+export async function getActivity(
+  db: Database,
+  opts: { limit?: number; offset?: number; order?: Order },
+): Promise<{ items: ActivityItem[]; pagination: Pagination }> {
+  const { limit, offset } = clampPage(opts, 10, 1000);
+  const dir = (opts.order ?? "desc") === "asc" ? sql`asc` : sql`desc`;
+  const totalRows = await db.execute<{ total: number }>(sql`
+    select count(distinct ${GROUP_KEY})::int as total from ${transaction} t where t.coinbase = false
+  `);
+  const total = totalRows[0]?.total ?? 0;
+  if (total === 0) return { items: [], pagination: { total, limit, offset, hasMore: false } };
+  // min(t.id) breaks ties between groups settling in the same block.
+  const groups = await db.execute<GroupRow>(sql`
+    select max(t.druid) as druid, array_agg(t.hash order by t.id) as hashes, max(b.num)::int as num
+    from ${transaction} t
+    inner join ${block} b on b.hash = t."blockHash"
+    where t.coinbase = false
+    group by ${GROUP_KEY}
+    order by max(b.num) ${dir}, min(t.id) ${dir}
+    limit ${limit} offset ${offset}
+  `);
+  const [plain, swaps] = await Promise.all([
+    getTxListItems(db, groups.filter((g) => g.druid === null).flatMap((g) => g.hashes)),
+    getSwapsByDruids(db, groups.flatMap((g) => g.druid ?? [])),
+  ]);
+  const plainByHash = new Map(plain.map((p) => [p.hash, p]));
+  const items = groups.flatMap((g): ActivityItem[] => {
+    if (g.druid !== null) {
+      const found = swaps.get(g.druid);
+      return found ? [{ kind: "swap", ...found.swap }] : [];
+    }
+    const tx = plainByHash.get(g.hashes[0] ?? "");
+    return tx ? [{ kind: "tx", ...tx }] : [];
+  });
+  return { items, pagination: { total, limit, offset, hasMore: offset + limit < total } };
+}
+
+export interface AccountActivityItem {
+  kind: "tx" | "swap";
+  // The address's own transactions in this entry: one for "tx"; for "swap",
+  // the halves the address takes part in.
+  txs: AccountTx[];
+  // The whole swap (every half), so both sides of the trade can be shown.
+  swap: Swap | null;
+  blockNum: number;
+  // The address's token balance after this entry's block, in raw units.
+  balanceAfter: string;
+}
+
+/**
+ * An address's ledger with each swap as a single entry. Membership matches
+ * getAccountTransactions: the address owns an output or a resolved input.
+ */
+export async function getAccountActivity(
+  db: Database,
+  address: string,
+  opts: { limit?: number; offset?: number },
+): Promise<{ items: AccountActivityItem[]; pagination: Pagination }> {
+  const { limit, offset } = clampPage(opts, 25, 1000);
+  const belongs = sql`(
+    exists (select 1 from ${txOut} o where o."txHash" = t.hash and o."scriptPublicKey" = ${address})
+    or exists (select 1 from ${txInExpanded} e where e."txHash" = t.hash and e."outScriptPublicKey" = ${address})
+  )`;
+  const totalRows = await db.execute<{ total: number }>(sql`
+    select count(distinct ${GROUP_KEY})::int as total from ${transaction} t where ${belongs}
+  `);
+  const total = totalRows[0]?.total ?? 0;
+  if (total === 0) return { items: [], pagination: { total: 0, limit, offset, hasMore: false } };
+  const groups = await db.execute<GroupRow>(sql`
+    select max(t.druid) as druid, array_agg(t.hash order by t.id) as hashes, max(b.num)::int as num
+    from ${transaction} t
+    inner join ${block} b on b.hash = t."blockHash"
+    where ${belongs}
+    group by ${GROUP_KEY}
+    order by max(b.num) desc, min(t.id) desc
+    limit ${limit} offset ${offset}
+  `);
+  const [details, swaps, balances] = await Promise.all([
+    loadTxDetails(db, groups.flatMap((g) => g.hashes)),
+    getSwapsByDruids(db, groups.flatMap((g) => g.druid ?? [])),
+    runningBalances(db, address, groups.map((g) => g.num)),
+  ]);
+  const detailByHash = new Map(details.map((d) => [d.hash, d]));
+  const items = groups.map((g): AccountActivityItem => {
+    const balanceAfter = balances.get(g.num) ?? "0";
+    const found = g.druid !== null ? swaps.get(g.druid) : undefined;
+    const blockNumByHash = new Map(found?.halves.map((h) => [h.hash, h.blockNum]));
+    return {
+      kind: g.druid !== null ? "swap" : "tx",
+      txs: g.hashes.flatMap((h) => {
+        const d = detailByHash.get(h);
+        return d ? [{ ...d, blockNum: blockNumByHash.get(h) ?? g.num, balanceAfter }] : [];
+      }),
+      swap: found?.swap ?? null,
+      blockNum: g.num,
+      balanceAfter,
+    };
+  });
+  return { items, pagination: { total, limit, offset, hasMore: offset + limit < total } };
 }

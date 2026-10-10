@@ -3,7 +3,10 @@ import { createDb, type Database } from "./client.js";
 import {
   block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
 } from "./schema.js";
-import { buildSwap, getSwapByDruid, getSwapsByDruids, getSwaps, type SwapHalf } from "./swaps.js";
+import {
+  buildSwap, getSwapByDruid, getSwapsByDruids, getSwaps, getActivity, getAccountActivity,
+  type ActivityItem, type SwapHalf,
+} from "./swaps.js";
 
 type In = { from: string | null; amount: string; kind?: "token" | "item"; genesis?: string };
 type Out = { to: string; amount: string; kind?: "token" | "item"; genesis?: string };
@@ -299,5 +302,63 @@ describe("swap queries", () => {
     const second = await getSwaps(db(), { limit: 1, offset: 1 });
     expect(second.swaps.map((s) => s.druid)).toEqual(["DRUID0xs1"]);
     expect(second.pagination.hasMore).toBe(false);
+  });
+
+  const key = (i: ActivityItem): string => (i.kind === "swap" ? i.druid : i.hash);
+
+  it("getActivity shows one row per swap, newest first, without the coinbase", async () => {
+    const all = await getActivity(db(), { limit: 10 });
+    expect(all.items.map(key)).toEqual([
+      "tx_plain_3", "DRUID0xs2", "tx_plain_2", "tx_mid_2", "DRUID0xs1", "tx_plain_1",
+    ]);
+    expect(all.pagination).toMatchObject({ total: 6, hasMore: false });
+    const swap = all.items.find((i) => i.kind === "swap" && i.druid === "DRUID0xs1");
+    expect(swap).toMatchObject({ kind: "swap", blockNum: 2, complete: true, txHashes: ["sA1", "sB1"] });
+    const plain = all.items.find((i) => i.kind === "tx" && i.hash === "tx_plain_2");
+    expect(plain).toMatchObject({ kind: "tx", blockNum: 2, blockHash: "sb2", txType: "token", value: "7", druid: null });
+  });
+
+  it("getActivity never splits a swap across a page boundary", async () => {
+    const p1 = await getActivity(db(), { limit: 4, offset: 0 });
+    const p2 = await getActivity(db(), { limit: 4, offset: 4 });
+    expect(p1.items.map(key)).toEqual(["tx_plain_3", "DRUID0xs2", "tx_plain_2", "tx_mid_2"]);
+    expect(p2.items.map(key)).toEqual(["DRUID0xs1", "tx_plain_1"]);
+    expect(p1.pagination.hasMore).toBe(true);
+    expect(p2.pagination.hasMore).toBe(false);
+  });
+
+  it("getActivity supports ascending order", async () => {
+    const asc = await getActivity(db(), { limit: 10, order: "asc" });
+    expect(asc.items.map(key)).toEqual([
+      "tx_plain_1", "DRUID0xs1", "tx_mid_2", "tx_plain_2", "DRUID0xs2", "tx_plain_3",
+    ]);
+  });
+
+  it("getAccountActivity groups an address's swap halves into one entry with the full swap", async () => {
+    const acct = await getAccountActivity(db(), "A", { limit: 10 });
+    expect(acct.items.map((i) => [i.kind, i.swap?.druid ?? i.txs[0]?.hash, i.blockNum, i.balanceAfter])).toEqual([
+      ["swap", "DRUID0xs2", 3, "900"],
+      ["swap", "DRUID0xs1", 2, "1000"],
+      ["tx", "tx_plain_1", 1, "0"],
+    ]);
+    expect(acct.pagination).toMatchObject({ total: 3, hasMore: false });
+    const s1 = acct.items[1]!;
+    expect(s1.swap?.legs).toHaveLength(2);
+    expect(s1.txs.map((t) => t.hash).sort()).toEqual(["sA1", "sB1"]);
+  });
+
+  it("getAccountActivity lists only the address's own halves but keeps every leg", async () => {
+    // P is not a party to any swap; M is in DRUID0xs2 and one plain transaction.
+    const m = await getAccountActivity(db(), "M", { limit: 10 });
+    expect(m.items.map((i) => i.swap?.druid ?? i.txs[0]?.hash)).toEqual(["DRUID0xs2", "tx_mid_2"]);
+    expect(m.items[0]?.swap?.legs).toHaveLength(2);
+    const none = await getAccountActivity(db(), "nobody", { limit: 10 });
+    expect(none).toEqual({ items: [], pagination: { total: 0, limit: 10, offset: 0, hasMore: false } });
+  });
+
+  it("getAccountActivity pages by entry", async () => {
+    const page = await getAccountActivity(db(), "A", { limit: 1, offset: 1 });
+    expect(page.items.map((i) => i.swap?.druid)).toEqual(["DRUID0xs1"]);
+    expect(page.pagination).toMatchObject({ total: 3, hasMore: true });
   });
 });

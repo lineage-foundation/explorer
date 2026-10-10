@@ -29,6 +29,7 @@ export interface BlockTxItem {
 export interface TxListItem {
   hash: string; blockHash: string; blockNum: number; version: number;
   timestamp: Date | null; txType: string | undefined; value: string | null;
+  druid: string | null;
 }
 export interface TxDetail {
   blockHash: string; hash: string; version: number; timestamp: Date | null;
@@ -208,11 +209,8 @@ export async function getTransactions(
   if (total === 0) {
     return { transactions: [], pagination: { total, limit, offset, hasMore: false } };
   }
-  const rows = await db
-    .select({
-      hash: transaction.hash, blockHash: transaction.blockHash, blockNum: block.num,
-      version: transaction.version, timestamp: block.timestamp,
-    })
+  const page = await db
+    .select({ hash: transaction.hash })
     .from(transaction)
     .innerJoin(block, eq(block.hash, transaction.blockHash))
     .where(eq(transaction.coinbase, false))
@@ -221,30 +219,46 @@ export async function getTransactions(
     .orderBy(direction(block.num), direction(transaction.id))
     .limit(limit)
     .offset(offset);
-  const hashes = rows.map((r) => r.hash);
-  const firstOuts = hashes.length
-    ? await db.select({ txHash: txOut.txHash, valueType: txOut.valueType })
-        .from(txOut).where(and(inArray(txOut.txHash, hashes), eq(txOut.n, 0)))
-    : [];
-  const typeByHash = new Map(firstOuts.map((o) => [o.txHash, o.valueType]));
-  // Total token output moved by the tx (gross). The NET amount actually sent to
-  // a recipient isn't derivable on-chain: wallets send change to a fresh address
-  // unrelated to the inputs, so change is indistinguishable from a payment. The
-  // UI labels this "Total out"; per-recipient amounts are shown on address pages.
-  const values = hashes.length
-    ? await db
-        .select({ txHash: txOut.txHash, value: sql<string>`sum(${txOut.amount})` })
-        .from(txOut)
-        .where(and(inArray(txOut.txHash, hashes), eq(txOut.valueType, "token")))
-        .groupBy(txOut.txHash)
-    : [];
-  const valueByHash = new Map(values.map((v) => [v.txHash, v.value]));
   return {
-    transactions: rows.map((r) => ({
-      ...r, txType: typeByHash.get(r.hash), value: valueByHash.get(r.hash) ?? null,
-    })),
+    transactions: await getTxListItems(db, page.map((r) => r.hash)),
     pagination: { total, limit, offset, hasMore: offset + limit < total },
   };
+}
+
+/**
+ * List-row summaries for the given transaction hashes, returned in the caller's
+ * hash order (callers pass an already-paginated, ordered hash list).
+ */
+export async function getTxListItems(db: Database, hashes: string[]): Promise<TxListItem[]> {
+  if (hashes.length === 0) return [];
+  const [rows, firstOuts, values] = await Promise.all([
+    db
+      .select({
+        hash: transaction.hash, blockHash: transaction.blockHash, blockNum: block.num,
+        version: transaction.version, timestamp: block.timestamp, druid: transaction.druid,
+      })
+      .from(transaction)
+      .innerJoin(block, eq(block.hash, transaction.blockHash))
+      .where(inArray(transaction.hash, hashes)),
+    db.select({ txHash: txOut.txHash, valueType: txOut.valueType })
+      .from(txOut).where(and(inArray(txOut.txHash, hashes), eq(txOut.n, 0))),
+    // Total token output moved by the tx (gross). The NET amount actually sent to
+    // a recipient isn't derivable on-chain: wallets send change to a fresh address
+    // unrelated to the inputs, so change is indistinguishable from a payment. The
+    // UI labels this "Total out"; per-recipient amounts are shown on address pages.
+    db
+      .select({ txHash: txOut.txHash, value: sql<string>`sum(${txOut.amount})` })
+      .from(txOut)
+      .where(and(inArray(txOut.txHash, hashes), eq(txOut.valueType, "token")))
+      .groupBy(txOut.txHash),
+  ]);
+  const rowByHash = new Map(rows.map((r) => [r.hash, r]));
+  const typeByHash = new Map(firstOuts.map((o) => [o.txHash, o.valueType]));
+  const valueByHash = new Map(values.map((v) => [v.txHash, v.value]));
+  return hashes.flatMap((h) => {
+    const r = rowByHash.get(h);
+    return r ? [{ ...r, txType: typeByHash.get(h), value: valueByHash.get(h) ?? null }] : [];
+  });
 }
 
 export async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]> {
@@ -412,7 +426,7 @@ export async function getAccountTransactions(
  * block_num column (legacy NULL) are ignored — such an address needs a resync
  * (see deleteFromHeight) for an accurate running balance.
  */
-async function runningBalances(
+export async function runningBalances(
   db: Database,
   address: string,
   blockNums: number[],
