@@ -247,7 +247,7 @@ export async function getTransactions(
   };
 }
 
-async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]> {
+export async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]> {
   if (hashes.length === 0) return [];
   // The four reads are independent — issue them in parallel.
   const [txs, ins, outs, expanded] = await Promise.all([

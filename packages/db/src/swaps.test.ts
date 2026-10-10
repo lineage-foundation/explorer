@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { buildSwap, type SwapHalf } from "./swaps.js";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { createDb, type Database } from "./client.js";
+import {
+  block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
+} from "./schema.js";
+import { buildSwap, getSwapByDruid, getSwapsByDruids, getSwaps, type SwapHalf } from "./swaps.js";
 
 type In = { from: string | null; amount: string; kind?: "token" | "item"; genesis?: string };
 type Out = { to: string; amount: string; kind?: "token" | "item"; genesis?: string };
@@ -170,5 +174,130 @@ describe("buildSwap", () => {
   it("accepts a numeric Token amount", () => {
     const a = { ...halfA, druidInfo: { participants: 2, expectations: [{ to: "A", asset: { Token: 1000 } }] } };
     expect(buildSwap("D1", [a, halfB]).legs.find((l) => l.to === "A")).toMatchObject({ met: true });
+  });
+});
+
+const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
+let handle: { db: Database; close: () => Promise<void> };
+const db = () => handle.db;
+
+type SeedOut = { to: string; amount: string; kind?: "token" | "item"; genesis?: string };
+type SeedIn = { prev: string; n: number; from: string };
+interface SeedTx {
+  hash: string; block: string; coinbase?: boolean; druid?: string; expects?: Expect[];
+  ins?: SeedIn[]; outs: SeedOut[];
+}
+
+// Insert order is significant: transaction ids break ties within a block.
+const SEED: SeedTx[] = [
+  { hash: "tx_plain_1", block: "sb1", outs: [{ to: "B", amount: "1000000" }, { to: "A", amount: "1", kind: "item", genesis: "gen1" }] },
+  // DRUID0xs1 — A's item for B's 1000 tokens. An unrelated transaction sits
+  // between the two halves so their ids are not adjacent.
+  {
+    hash: "sA1", block: "sb2", druid: "DRUID0xs1", expects: [{ to: "A", token: "1000" }],
+    ins: [{ prev: "tx_plain_1", n: 1, from: "A" }], outs: [{ to: "B", amount: "1", kind: "item", genesis: "gen1" }],
+  },
+  { hash: "tx_mid_2", block: "sb2", outs: [{ to: "M", amount: "300" }] },
+  {
+    hash: "sB1", block: "sb2", druid: "DRUID0xs1", expects: [{ to: "B", item: { amount: "1", genesis: "gen1" } }],
+    ins: [{ prev: "tx_plain_1", n: 0, from: "B" }], outs: [{ to: "A", amount: "1000" }, { to: "B", amount: "999000" }],
+  },
+  { hash: "tx_plain_2", block: "sb2", outs: [{ to: "P", amount: "7" }] },
+  { hash: "tx_cb_3", block: "sb3", coinbase: true, outs: [{ to: "miner", amount: "50" }] },
+  // DRUID0xs2 — A's 400 tokens for M's 300 tokens.
+  {
+    hash: "sA2", block: "sb3", druid: "DRUID0xs2", expects: [{ to: "A", token: "300" }],
+    ins: [{ prev: "sB1", n: 0, from: "A" }], outs: [{ to: "M", amount: "400" }, { to: "A", amount: "600" }],
+  },
+  {
+    hash: "sB2", block: "sb3", druid: "DRUID0xs2", expects: [{ to: "M", token: "400" }],
+    ins: [{ prev: "tx_mid_2", n: 0, from: "M" }], outs: [{ to: "A", amount: "300" }],
+  },
+  { hash: "tx_plain_3", block: "sb3", outs: [{ to: "P", amount: "9" }] },
+];
+
+describe("swap queries", () => {
+  beforeAll(async () => {
+    handle = createDb(URL);
+    for (const t of [txInExpanded, txIn, txOut, transaction, coinsHistory, circulatingSupply, block]) {
+      await db().delete(t);
+    }
+    await db().insert(block).values([
+      { version: 1, num: 1, hash: "sb1", timestamp: new Date("2024-01-01T00:00:00Z"), nbTx: 1 },
+      { version: 1, num: 2, hash: "sb2", previousHash: "sb1", timestamp: new Date("2024-01-02T00:00:00Z"), nbTx: 4 },
+      { version: 1, num: 3, hash: "sb3", previousHash: "sb2", timestamp: new Date("2024-01-03T00:00:00Z"), nbTx: 3 },
+    ]);
+    const outIds = new Map<string, number>();
+    for (const t of SEED) {
+      const [row] = await db().insert(transaction).values({
+        hash: t.hash, blockHash: t.block, version: t.druid ? 2 : 1, coinbase: t.coinbase ?? false,
+        druid: t.druid ?? null,
+        druidInfo: t.druid
+          ? {
+            druid: t.druid, participants: 2, genesis_hash: null,
+            expectations: (t.expects ?? []).map((e) => ({
+              from: "hash-of-inputs",
+              to: e.to,
+              asset: e.item
+                ? { Item: { amount: e.item.amount, genesis_hash: e.item.genesis, metadata: null } }
+                : { Token: e.token },
+            })),
+          }
+          : null,
+      }).returning({ id: transaction.id });
+      const txId = row!.id;
+      for (const [n, o] of t.outs.entries()) {
+        const [out] = await db().insert(txOut).values({
+          txId, txHash: t.hash, valueType: o.kind ?? "token", amount: o.amount, locktime: "0",
+          genesisHash: o.genesis ?? null, scriptPublicKey: o.to, n,
+        }).returning({ id: txOut.id });
+        outIds.set(`${t.hash}:${n}`, out!.id);
+      }
+      for (const i of t.ins ?? []) {
+        const common = { txId, txHash: t.hash, scriptSignature: {}, previousOutTxHash: i.prev, previousOutTxN: i.n };
+        await db().insert(txIn).values(common);
+        await db().insert(txInExpanded).values({ ...common, outScriptPublicKey: i.from });
+      }
+    }
+    // A's token balance: 1000 after block 2 (sB1:0), 900 after block 3 (sA2:1 + sB2:0).
+    await db().insert(coinsHistory).values([
+      { address: "A", date: new Date("2024-01-02T00:00:00Z"), blockNum: 2, outIds: [outIds.get("sB1:0")] },
+      { address: "A", date: new Date("2024-01-03T00:00:00Z"), blockNum: 3, outIds: [outIds.get("sA2:1"), outIds.get("sB2:0")] },
+    ]);
+  });
+
+  afterAll(async () => { await handle.close(); });
+
+  it("getSwapByDruid returns the swap and both halves", async () => {
+    const found = await getSwapByDruid(db(), "DRUID0xs1");
+    expect(found?.swap).toMatchObject({
+      druid: "DRUID0xs1", complete: true, blockNum: 2, blockHash: "sb2", participants: 2,
+      txHashes: ["sA1", "sB1"],
+    });
+    expect(found?.swap.legs).toEqual([
+      { from: ["B"], to: "A", asset: { kind: "token", amount: "1000", genesisHash: null, metadata: null }, txHash: "sB1", met: true },
+      { from: ["A"], to: "B", asset: { kind: "item", amount: "1", genesisHash: "gen1", metadata: null }, txHash: "sA1", met: true },
+    ]);
+    expect(found?.halves.map((h) => [h.hash, h.blockNum])).toEqual([["sA1", 2], ["sB1", 2]]);
+  });
+
+  it("getSwapByDruid returns null for an unknown druid", async () => {
+    expect(await getSwapByDruid(db(), "nope")).toBeNull();
+  });
+
+  it("getSwapsByDruids loads several swaps and skips unknown druids", async () => {
+    const map = await getSwapsByDruids(db(), ["DRUID0xs2", "nope", "DRUID0xs1"]);
+    expect([...map.keys()].sort()).toEqual(["DRUID0xs1", "DRUID0xs2"]);
+    expect(map.get("DRUID0xs2")?.swap.complete).toBe(true);
+    expect((await getSwapsByDruids(db(), [])).size).toBe(0);
+  });
+
+  it("getSwaps pages distinct druids, newest settlement first", async () => {
+    const first = await getSwaps(db(), { limit: 1, offset: 0 });
+    expect(first.swaps.map((s) => s.druid)).toEqual(["DRUID0xs2"]);
+    expect(first.pagination).toMatchObject({ total: 2, limit: 1, offset: 0, hasMore: true });
+    const second = await getSwaps(db(), { limit: 1, offset: 1 });
+    expect(second.swaps.map((s) => s.druid)).toEqual(["DRUID0xs1"]);
+    expect(second.pagination.hasMore).toBe(false);
   });
 });
