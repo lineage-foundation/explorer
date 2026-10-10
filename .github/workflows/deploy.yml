@@ -24,8 +24,9 @@ name: Deploy
 #   variable RAILWAY_WEB_SERVICE      optional; defaults to "web"
 #   variable EXPLORER_URL             optional; defaults to
 #                                     https://explorer.lineage.to
-# The indexer service should have a healthcheck on /health so that "deployed"
-# means "migrations applied".
+# The indexer service has a healthcheck on /health so that "deployed" means
+# "migrations applied", and INDEXER_LOCK_ON_BUSY=wait so the new instance can
+# come up healthy while the old one still holds the indexer lock.
 
 on:
   workflow_run:

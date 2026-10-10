@@ -133,12 +133,16 @@ One-off setup:
 | `RAILWAY_WEB_SERVICE` | repo **variable** (optional) | web service name or id; defaults to `web` |
 | `EXPLORER_URL` | repo **variable** (optional) | public URL to smoke-test; defaults to `https://explorer.lineage.to` |
 
-The indexer service should have a healthcheck in Railway: path `/health`, with
-a `PORT=8080` variable so Railway probes the indexer's health port. The
-indexer only starts answering after its migrations have run, so a healthy
-indexer means a migrated database. Without the healthcheck the web app can go
-out a moment before the migration finishes; the smoke test still catches a
-broken result.
+The indexer service has a healthcheck in Railway, set up as:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| healthcheck path | `/health` | the indexer answers only after its migrations have run, so healthy means migrated |
+| `PORT` | `8080` | tells Railway which port to probe; it is the indexer's default `HEALTH_PORT` |
+| `INDEXER_LOCK_ON_BUSY` | `wait` | Railway keeps the old indexer running until the new one is healthy, so the new one must wait for the indexer lock rather than exit |
+
+While it waits for the lock the new indexer already answers `/health`; it
+starts indexing when the old one stops and releases the lock.
 
 To redeploy by hand, run the `Deploy` workflow from the Actions tab and
 optionally give it a branch, tag or commit.
