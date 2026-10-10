@@ -98,6 +98,10 @@ export const txOut = pgTable(
     genesisHash: varchar("genesisHash"),
     scriptPublicKey: varchar("scriptPublicKey"),
     itemMetadata: varchar("itemMetadata"),
+    // The item an item output belongs to: the create transaction's hash. For a
+    // transfer that is genesisHash; for the creation output (whose genesisHash
+    // is null on chain) it is the output's own txHash. Null for token outputs.
+    itemGenesis: varchar("itemGenesis"),
     n: integer("n").notNull(),
     createdAt: timestamp("createdAt", { withTimezone: false }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { withTimezone: false }).defaultNow().notNull(),
@@ -116,6 +120,12 @@ export const txOut = pgTable(
     // Trigram GIN index for case-insensitive substring search on item metadata
     // (ILIKE '%q%'). Requires the pg_trgm extension (enabled in migration 0003).
     itemMetadataTrgm: index("IX_tx_out_itemMetadata_trgm").using("gin", sql`${t.itemMetadata} gin_trgm_ops`),
+    // Every per-item read (holders, history, search by genesis).
+    itemGenesisIdx: index("IX_tx_out_itemGenesis").on(t.itemGenesis),
+    // Creation outputs only — one per item — so listing items newest-first
+    // does not scan every output.
+    itemCreationIdx: index("IX_tx_out_item_creation").on(t.id)
+      .where(sql`${t.valueType} = 'item' AND ${t.genesisHash} IS NULL`),
   }),
 );
 

@@ -41,3 +41,18 @@ describe("druidOf", () => {
     expect(druidOf(v)).toBeNull();
   });
 });
+
+describe("mapOutputRow itemGenesis", () => {
+  it("is the transaction's own hash for a creation output", () => {
+    const row = mapOutputRow(1, "tx_c", { value: { Item: { amount: "1", genesis_hash: null, metadata: "m" } }, locktime: 0, script_public_key: "A" }, 0);
+    expect(row.itemGenesis).toBe("tx_c");
+    expect(row.genesisHash).toBeNull();
+  });
+  it("is the stored genesis hash for a transfer output", () => {
+    const row = mapOutputRow(1, "tx_t", { value: { Item: { amount: "1", genesis_hash: "tx_c", metadata: null } }, locktime: 0, script_public_key: "B" }, 0);
+    expect(row.itemGenesis).toBe("tx_c");
+  });
+  it("is null for a token output", () => {
+    expect(mapOutputRow(1, "tx_k", { value: { Token: "5" }, locktime: 0, script_public_key: "A" }, 0).itemGenesis).toBeNull();
+  });
+});

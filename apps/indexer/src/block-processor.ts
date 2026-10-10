@@ -46,7 +46,8 @@ export async function processBlock(
         const [outRow] = await tx.insert(schema.txOut).values({
           txId: mapped.txId, txHash: mapped.txHash, valueType: mapped.valueType,
           amount: mapped.amount, locktime: mapped.locktime, genesisHash: mapped.genesisHash,
-          scriptPublicKey: mapped.scriptPublicKey, itemMetadata: mapped.itemMetadata, n: mapped.n,
+          scriptPublicKey: mapped.scriptPublicKey, itemMetadata: mapped.itemMetadata,
+          itemGenesis: mapped.itemGenesis, n: mapped.n,
         }).returning({ id: schema.txOut.id });
         const outId = outRow!.id;
         outIdsByRef.set(`${p.hash}:${n}`, { id: outId, scriptPublicKey: mapped.scriptPublicKey, isToken: mapped.isToken });

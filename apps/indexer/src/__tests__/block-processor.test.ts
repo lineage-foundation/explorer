@@ -16,6 +16,23 @@ beforeEach(async () => {
 });
 
 describe("processBlock", () => {
+  it("stores each item output's item genesis", async () => {
+    const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["mk", "xf", "tk"] });
+    const itemOut = (genesis: string | null, to: string) => ({
+      value: { Item: { amount: "1", genesis_hash: genesis, metadata: genesis === null ? "meta" : null } }, locktime: 0, script_public_key: to,
+    });
+    await processBlock(db(), {
+      blockHash: "H0", block, skip: new Set(),
+      transactions: [
+        { hash: "mk", tx: { version: 1, druid_info: null, inputs: [], outputs: [itemOut(null, "A")] }, coinbase: false },
+        { hash: "xf", tx: { version: 1, druid_info: null, inputs: [{ previous_out: { t_hash: "mk", n: 0 }, script_signature: {} }], outputs: [itemOut("mk", "B")] }, coinbase: false },
+        { hash: "tk", tx: buildTokenTx([{ address: "A", amount: 1 }]), coinbase: false },
+      ],
+    });
+    const rows = await db().select({ txHash: schema.txOut.txHash, itemGenesis: schema.txOut.itemGenesis }).from(schema.txOut);
+    expect(Object.fromEntries(rows.map((r) => [r.txHash, r.itemGenesis]))).toEqual({ mk: "mk", xf: "mk", tk: null });
+  });
+
   it("stores the druid of a two-way half and null for an ordinary transaction", async () => {
     const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["d1", "p1"] });
     const half = {
