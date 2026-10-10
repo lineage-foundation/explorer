@@ -75,3 +75,14 @@ export function mapOutputRow(
     isToken: false,
   };
 }
+
+/**
+ * The DRUID of a two-way swap half, or null for an ordinary transaction. The
+ * node's `druid_info` is untyped here, so anything but an object carrying a
+ * non-empty string `druid` is treated as "not a swap half".
+ */
+export function druidOf(druidInfo: unknown): string | null {
+  if (typeof druidInfo !== "object" || druidInfo === null) return null;
+  const druid = (druidInfo as { druid?: unknown }).druid;
+  return typeof druid === "string" && druid !== "" ? druid : null;
+}

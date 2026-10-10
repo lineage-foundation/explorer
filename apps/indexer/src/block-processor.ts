@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "@explorer/db";
 import { schema, getLatestCoinsHistoryOutIds } from "@explorer/db";
 import type { LineageBlock, LineageTransaction } from "@explorer/chain";
-import { mapBlockRow, mapOutputRow } from "./mappers.js";
+import { mapBlockRow, mapOutputRow, druidOf } from "./mappers.js";
 import { BalanceTracker } from "./balance-tracker.js";
 
 export interface PreparedTx { hash: string; tx: LineageTransaction; coinbase: boolean }
@@ -36,7 +36,7 @@ export async function processBlock(
       if (skip.has(p.hash)) continue;
       const [row] = await tx.insert(schema.transaction).values({
         hash: p.hash, blockHash, version: p.tx.version,
-        druidInfo: p.tx.druid_info, fees: p.tx.fees ?? null, coinbase: p.coinbase,
+        druidInfo: p.tx.druid_info, druid: druidOf(p.tx.druid_info), fees: p.tx.fees ?? null, coinbase: p.coinbase,
       }).returning({ id: schema.transaction.id });
       const txId = row!.id;
       txIdByHash.set(p.hash, txId);

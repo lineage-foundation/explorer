@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapBlockRow, mapOutputRow } from "../mappers.js";
+import { mapBlockRow, mapOutputRow, druidOf } from "../mappers.js";
 import { buildBlock } from "./fake-source.js";
 
 describe("mapBlockRow", () => {
@@ -30,5 +30,14 @@ describe("mapOutputRow", () => {
     const big = "123456789012345678"; // would round to ...680 if coerced through a JS number
     const r = mapOutputRow(1, "tx", { value: { Token: big }, locktime: 0, script_public_key: "a" }, 0);
     expect(r.amount).toBe(big);
+  });
+});
+
+describe("druidOf", () => {
+  it("returns the druid string", () => {
+    expect(druidOf({ druid: "DRUID0xabc", participants: 2, expectations: [] })).toBe("DRUID0xabc");
+  });
+  it.each([null, undefined, "x", 7, {}, { druid: "" }, { druid: 5 }])("druidOf(%j) is null", (v) => {
+    expect(druidOf(v)).toBeNull();
   });
 });
