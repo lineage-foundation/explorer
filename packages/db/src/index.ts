@@ -5,3 +5,4 @@ export type {
   Block, Transaction, TxIn, TxOut, TxInExpanded, CoinsHistory, CirculatingSupply,
 } from "./schema.js";
 export * from "./queries.js";
+export * from "./swaps.js";
