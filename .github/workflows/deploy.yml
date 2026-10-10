@@ -13,17 +13,19 @@ name: Deploy
 # deploying both at once can leave the web app querying columns that do not
 # exist yet.
 #
+# The explorer runs in the Railway project "services", environment "testnet",
+# as the services "indexer" and "web". Each builds its own Dockerfile from the
+# repo root, selected by its RAILWAY_DOCKERFILE_PATH variable.
+#
 # Setup (one-off, see README "Deployment"):
-#   secret   RAILWAY_TOKEN            a Railway *project* token for the project
-#                                     and environment that host the explorer
-#   variable RAILWAY_INDEXER_SERVICE  name or id of the indexer service
-#   variable RAILWAY_WEB_SERVICE      name or id of the web service
-#   variable EXPLORER_URL             public URL to smoke-test (optional;
-#                                     defaults to https://explorer.lineage.to)
-# Each Railway service must build its own Dockerfile from the repo root
-# (apps/indexer/Dockerfile, apps/web/Dockerfile), and the indexer service
-# should have its healthcheck path set to /health so that "deployed" means
-# "migrations applied".
+#   secret   RAILWAY_TOKEN            a Railway *project* token for the
+#                                     "services" project, "testnet" environment
+#   variable RAILWAY_INDEXER_SERVICE  optional; defaults to "indexer"
+#   variable RAILWAY_WEB_SERVICE      optional; defaults to "web"
+#   variable EXPLORER_URL             optional; defaults to
+#                                     https://explorer.lineage.to
+# The indexer service should have a healthcheck on /health so that "deployed"
+# means "migrations applied".
 
 on:
   workflow_run:
@@ -40,7 +42,7 @@ on:
 
 concurrency:
   # One deploy at a time; a newer one waits rather than racing the migration.
-  group: deploy-production
+  group: deploy-testnet
   cancel-in-progress: false
 
 permissions:
@@ -59,26 +61,22 @@ jobs:
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main')
     environment:
-      name: production
+      name: testnet
       url: ${{ vars.EXPLORER_URL || 'https://explorer.lineage.to' }}
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      INDEXER_SERVICE: ${{ vars.RAILWAY_INDEXER_SERVICE }}
-      WEB_SERVICE: ${{ vars.RAILWAY_WEB_SERVICE }}
+      INDEXER_SERVICE: ${{ vars.RAILWAY_INDEXER_SERVICE || 'indexer' }}
+      WEB_SERVICE: ${{ vars.RAILWAY_WEB_SERVICE || 'web' }}
       EXPLORER_URL: ${{ vars.EXPLORER_URL || 'https://explorer.lineage.to' }}
       # The exact commit CI verified (or the requested ref for a manual run).
       DEPLOY_REF: ${{ github.event.workflow_run.head_sha || inputs.ref || 'main' }}
     steps:
       - name: Check configuration
         run: |
-          missing=0
-          for name in RAILWAY_TOKEN INDEXER_SERVICE WEB_SERVICE; do
-            if [ -z "${!name}" ]; then
-              echo "::error::$name is not set. See the Deployment section of the README."
-              missing=1
-            fi
-          done
-          exit "$missing"
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::The RAILWAY_TOKEN secret is not set. See the Deployment section of the README."
+            exit 1
+          fi
 
       - uses: actions/checkout@v4
         with:

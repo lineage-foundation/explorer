@@ -118,21 +118,27 @@ and:
 The order is deliberate: the web app reads the columns the newest migration
 adds, so it must not go out before the indexer has migrated.
 
+The explorer runs in the Railway project `services`, environment `testnet`,
+as the services `indexer` and `web` (alongside `Postgres`). Each service builds
+its own Dockerfile from the repository root, selected by its
+`RAILWAY_DOCKERFILE_PATH` variable. Neither service is connected to this
+repository in Railway, so the workflow is the only thing that deploys them.
+
 One-off setup:
 
 | What | Where | Value |
 | --- | --- | --- |
-| `RAILWAY_TOKEN` | repo or `production` environment **secret** | a Railway *project token* for the project and environment hosting the explorer |
-| `RAILWAY_INDEXER_SERVICE` | repo **variable** | name or id of the indexer service |
-| `RAILWAY_WEB_SERVICE` | repo **variable** | name or id of the web service |
+| `RAILWAY_TOKEN` | repo or `testnet` environment **secret** | a Railway *project token* for the `services` project, `testnet` environment |
+| `RAILWAY_INDEXER_SERVICE` | repo **variable** (optional) | indexer service name or id; defaults to `indexer` |
+| `RAILWAY_WEB_SERVICE` | repo **variable** (optional) | web service name or id; defaults to `web` |
 | `EXPLORER_URL` | repo **variable** (optional) | public URL to smoke-test; defaults to `https://explorer.lineage.to` |
 
-In Railway, each service must build its own Dockerfile from the repository
-root (`apps/indexer/Dockerfile`, `apps/web/Dockerfile`), and the indexer
-service should set its healthcheck path to `/health`: the indexer only starts
-answering after its migrations have run, so a healthy indexer means a migrated
-database. If either service is also connected to this repository in Railway
-with automatic deploys, turn that off so a merge is not deployed twice.
+The indexer service should have a healthcheck in Railway: path `/health`, with
+a `PORT=8080` variable so Railway probes the indexer's health port. The
+indexer only starts answering after its migrations have run, so a healthy
+indexer means a migrated database. Without the healthcheck the web app can go
+out a moment before the migration finishes; the smoke test still catches a
+broken result.
 
 To redeploy by hand, run the `Deploy` workflow from the Actions tab and
 optionally give it a branch, tag or commit.
