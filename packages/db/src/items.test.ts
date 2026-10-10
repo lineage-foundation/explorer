@@ -3,7 +3,7 @@ import { createDb, type Database } from "./client.js";
 import {
   block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
 } from "./schema.js";
-import { getItem, getItems } from "./items.js";
+import { getItem, getItems, getItemHolders, getItemTransfers, getAddressItems } from "./items.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
 let handle: { db: Database; close: () => Promise<void> };
@@ -117,5 +117,78 @@ describe("getItems", () => {
     expect((await getItems(db(), { q: "50%_off" })).items).toHaveLength(1);
     expect((await getItems(db(), { q: "5%f" })).items).toHaveLength(0); // % is not a wildcard
     expect((await getItems(db(), { q: "50_" })).items).toHaveLength(0); // _ is not a wildcard
+  });
+});
+
+describe("getItemHolders", () => {
+  it("sums each holder's unspent outputs, largest first", async () => {
+    const res = await getItemHolders(db(), "it_a", {});
+    expect(res.holders).toEqual([{ address: "B", amount: "2" }, { address: "A", amount: "1" }]);
+    expect(res.pagination).toMatchObject({ total: 2, hasMore: false });
+  });
+
+  it("pages by holder", async () => {
+    const res = await getItemHolders(db(), "it_a", { limit: 1, offset: 1 });
+    expect(res.holders).toEqual([{ address: "A", amount: "1" }]);
+    expect((await getItemHolders(db(), "it_a", { limit: 1 })).pagination).toMatchObject({ total: 2, hasMore: true });
+  });
+
+  it("is empty for an unknown item", async () => {
+    expect(await getItemHolders(db(), "nope", {})).toEqual({
+      holders: [], pagination: { total: 0, limit: 25, offset: 0, hasMore: false },
+    });
+  });
+});
+
+describe("getItemTransfers", () => {
+  it("lists every transaction that moved the item, newest first, ending with its creation", async () => {
+    const { transfers, pagination } = await getItemTransfers(db(), "it_a", {});
+    expect(transfers.map((t) => [t.txHash, t.blockNum, t.created, t.from, t.to.map((o) => [o.address, o.amount]), t.druid])).toEqual([
+      ["xf_2", 3, false, ["B"], [["B", "1"], ["B", "1"]], null],
+      ["xf_1", 2, false, ["A"], [["B", "2"], ["A", "1"]], "DRUID0xit"],
+      ["it_a", 1, true, [], [["A", "3"]], null],
+    ]);
+    expect(transfers[0]).toMatchObject({ blockHash: "ib3", timestamp: new Date("2024-02-03T00:00:00Z") });
+    expect(pagination).toMatchObject({ total: 3, hasMore: false });
+  });
+
+  it("pages", async () => {
+    const res = await getItemTransfers(db(), "it_a", { limit: 1, offset: 1 });
+    expect(res.transfers.map((t) => t.txHash)).toEqual(["xf_1"]);
+    expect(res.pagination).toMatchObject({ total: 3, hasMore: true });
+  });
+
+  it("still lists transfers when the create transaction is not indexed", async () => {
+    const { transfers } = await getItemTransfers(db(), "missing_create", {});
+    expect(transfers.map((t) => [t.txHash, t.created, t.from])).toEqual([["orphan_xf", false, []]]);
+  });
+});
+
+describe("getAddressItems", () => {
+  it("lists the items an address currently holds, with the item's metadata", async () => {
+    expect((await getAddressItems(db(), "C", {})).items).toEqual([
+      { genesisHash: "it_b", amount: "1", metadata: null },
+      { genesisHash: "it_c", amount: "1", metadata: "not json <b>x</b>" },
+    ]);
+    expect((await getAddressItems(db(), "B", {})).items).toEqual([
+      { genesisHash: "it_a", amount: "2", metadata: ALPHA_META },
+    ]);
+    // A gave 2 of its 3 units away and holds the 1 it kept.
+    expect((await getAddressItems(db(), "A", {})).items).toEqual([
+      { genesisHash: "it_a", amount: "1", metadata: ALPHA_META },
+    ]);
+  });
+
+  it("keeps an item whose create transaction is not indexed, without metadata", async () => {
+    expect((await getAddressItems(db(), "D", {})).items).toEqual([
+      { genesisHash: "missing_create", amount: "1", metadata: null },
+    ]);
+  });
+
+  it("pages and is empty for an address holding nothing", async () => {
+    const page = await getAddressItems(db(), "C", { limit: 1, offset: 1 });
+    expect(page.items.map((i) => i.genesisHash)).toEqual(["it_c"]);
+    expect(page.pagination).toMatchObject({ total: 2, hasMore: false });
+    expect((await getAddressItems(db(), "P", {})).pagination.total).toBe(0);
   });
 });
