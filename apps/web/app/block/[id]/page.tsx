@@ -123,7 +123,7 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
                   if (r.kind === "swap") {
                     const swap = swaps.get(r.druid)?.swap;
                     return (
-                      <TR key={r.druid}>
+                      <TR key={`swap:${r.druid}`}>
                         <TD>
                           <Link href={swapHref(r.druid)} className="text-link hover:text-link-hover">
                             <Mono>{truncateHash(r.druid, 10, 4)}</Mono>
@@ -137,7 +137,7 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
                   const t = r.row;
                   const label = txTypeLabel(t.txType, t.coinbase);
                   return (
-                    <TR key={t.hash}>
+                    <TR key={`tx:${t.hash}`}>
                       <TD>
                         <Link href={`/transaction/${t.hash}`} className="text-link hover:text-link-hover">
                           <Mono>{truncateHash(t.hash)}</Mono>

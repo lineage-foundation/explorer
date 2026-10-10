@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
 import { createDb, type Database } from "./client.js";
 import {
   block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
@@ -360,5 +361,52 @@ describe("swap queries", () => {
     const page = await getAccountActivity(db(), "A", { limit: 1, offset: 1 });
     expect(page.items.map((i) => i.swap?.druid)).toEqual(["DRUID0xs1"]);
     expect(page.pagination).toMatchObject({ total: 3, hasMore: true });
+  });
+
+  it("keeps a transaction separate from a swap whose DRUID equals its hash", async () => {
+    // DRUIDs are client-chosen, so one can be the hash of an unrelated transaction.
+    await db().insert(transaction).values({
+      hash: "collide_x", blockHash: "sb3", version: 2, coinbase: false, druid: "tx_plain_2",
+      druidInfo: { druid: "tx_plain_2", participants: 2, expectations: [] },
+    });
+    try {
+      const all = await getActivity(db(), { limit: 20 });
+      expect(all.pagination.total).toBe(7);
+      expect(all.items.filter((i) => i.kind === "tx" && i.hash === "tx_plain_2")).toHaveLength(1);
+      expect(all.items.filter((i) => i.kind === "swap" && i.druid === "tx_plain_2")).toHaveLength(1);
+      expect(all.items).toHaveLength(7);
+    } finally {
+      await db().delete(transaction).where(eq(transaction.hash, "collide_x"));
+    }
+  });
+
+  it("keeps an address's transaction separate from a swap whose DRUID equals its hash", async () => {
+    const [row] = await db().insert(transaction).values({
+      hash: "collide_y", blockHash: "sb3", version: 2, coinbase: false, druid: "tx_mid_2",
+      druidInfo: { druid: "tx_mid_2", participants: 2, expectations: [] },
+    }).returning({ id: transaction.id });
+    await db().insert(txOut).values({
+      txId: row!.id, txHash: "collide_y", valueType: "token", amount: "1", locktime: "0", scriptPublicKey: "M", n: 0,
+    });
+    try {
+      const m = await getAccountActivity(db(), "M", { limit: 20 });
+      expect(m.pagination.total).toBe(3);
+      expect(m.items.map((i) => [i.kind, i.swap?.druid ?? i.txs[0]?.hash])).toEqual([
+        ["swap", "tx_mid_2"], ["swap", "DRUID0xs2"], ["tx", "tx_mid_2"],
+      ]);
+    } finally {
+      await db().delete(txOut).where(eq(txOut.txHash, "collide_y"));
+      await db().delete(transaction).where(eq(transaction.hash, "collide_y"));
+    }
+  });
+
+  it("caps the halves loaded for a heavily reused DRUID", async () => {
+    const capped = await getSwapsByDruids(db(), ["DRUID0xs1"], { maxHalves: 1 });
+    const found = capped.get("DRUID0xs1");
+    expect(found?.halves.map((h) => h.hash)).toEqual(["sA1"]);
+    expect(found?.swap.txHashes).toEqual(["sA1"]);
+    expect(found?.swap.complete).toBe(false);
+    // The default cap leaves an ordinary swap whole.
+    expect((await getSwapsByDruids(db(), ["DRUID0xs1"])).get("DRUID0xs1")?.halves).toHaveLength(2);
   });
 });

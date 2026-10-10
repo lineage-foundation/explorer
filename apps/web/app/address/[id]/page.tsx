@@ -56,7 +56,7 @@ export default async function AddressPage({
                       // A two-way swap is one entry: what this address gave and received.
                       const lines = swapLinesForAddress(entry.swap, id);
                       return (
-                        <TR key={entry.swap.druid}>
+                        <TR key={`swap:${entry.swap.druid}`}>
                           <TD>
                             <Link href={swapHref(entry.swap.druid)} className="text-link hover:text-link-hover">
                               <Mono>{truncateHash(entry.swap.druid, 10, 4)}</Mono>
@@ -88,7 +88,7 @@ export default async function AddressPage({
                     const net = netForAddress(t, id);
                     const abs = (net < 0n ? -net : net).toString();
                     return (
-                      <TR key={t.hash}>
+                      <TR key={`tx:${t.hash}`}>
                         <TD>
                           <Link href={`/transaction/${t.hash}`} className="text-link hover:text-link-hover">
                             <Mono>{truncateHash(t.hash)}</Mono>

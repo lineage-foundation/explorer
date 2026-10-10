@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { seed, SWAP_DRUID } from "./seed.js";
+import { seed, SWAP_DRUID, ODD_DRUID } from "./seed.js";
 
 test.beforeAll(async () => {
   await seed();
@@ -62,7 +62,7 @@ test("address page shows what was given and received", async ({ page }) => {
   await expect(row).toContainText("−1 item");
   await expect(row).toContainText("+4 LNGX");
   // Running token balance after the swap: the 4 LNGX received.
-  await expect(row).toContainText("4.00");
+  await expect(row.locator("td").nth(3)).toHaveText("4.00");
 });
 
 test("searching a DRUID goes to its swap", async ({ page }) => {
@@ -80,4 +80,25 @@ test("swap API returns the trade", async ({ request }) => {
   expect(res.status()).toBe(200);
   const body = await res.json();
   expect(body).toMatchObject({ druid: SWAP_DRUID, complete: true, transactions: ["sA", "sB"] });
+});
+
+test("a swap with a non-canonical DRUID is reachable from the list, by page and by API", async ({ page, request }) => {
+  const path = `/swap/${encodeURIComponent(ODD_DRUID)}`;
+  // The list links to it with the DRUID URL-encoded, and following the link works.
+  await page.goto("/transactions");
+  await page.locator(`a[href="${path}"]`).click();
+  await expect(page.getByRole("heading", { name: "Legs" })).toBeVisible();
+  await expect(page.getByText(ODD_DRUID, { exact: true })).toBeVisible();
+  await expect(page.getByText("met", { exact: true })).toHaveCount(2);
+  await expect(page.locator('a[href="/transaction/oA"]')).toBeVisible();
+  // Directly, too.
+  const direct = await page.goto(path);
+  expect(direct?.status()).toBe(200);
+  // And through the public API.
+  const res = await request.get(`/api/v1/swaps/${encodeURIComponent(ODD_DRUID)}`);
+  expect(res.status()).toBe(200);
+  expect(await res.json()).toMatchObject({ druid: ODD_DRUID, complete: true });
+  // Each half's banner links back to the same encoded path.
+  await page.goto("/transaction/oA");
+  await expect(page.locator(`a[href="${path}"]`)).toBeVisible();
 });

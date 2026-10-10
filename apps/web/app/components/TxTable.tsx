@@ -24,7 +24,7 @@ export function TxTable({ txs }: { txs: ActivityItem[] }) {
         {txs.map((t) => {
           if (t.kind === "swap") {
             return (
-              <TR key={t.druid}>
+              <TR key={`swap:${t.druid}`}>
                 <TD className="truncate">
                   <Link href={swapHref(t.druid)} className="text-link hover:text-link-hover">
                     <Mono>{truncateHash(t.druid, 10, 4)}</Mono>
@@ -43,7 +43,7 @@ export function TxTable({ txs }: { txs: ActivityItem[] }) {
           }
           const label = txTypeLabel(t.txType, false);
           return (
-            <TR key={t.hash}>
+            <TR key={`tx:${t.hash}`}>
               <TD className="truncate">
                 <Link href={`/transaction/${t.hash}`} className="text-link hover:text-link-hover">
                   <Mono>{truncateHash(t.hash)}</Mono>

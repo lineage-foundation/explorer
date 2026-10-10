@@ -49,6 +49,9 @@ export async function seed(): Promise<void> {
 }
 
 export const SWAP_DRUID = `DRUID0x${"ab".repeat(16)}`;
+// DRUIDs are chosen by clients, so one need not look like the SDK's. This one
+// needs URL-encoding in every position a path segment can go wrong.
+export const ODD_DRUID = "odd druid/1 50%";
 
 // A two-way swap in block 1 between two addresses of its own (addrC, addrD), so
 // the balances and counts the other specs assert are untouched:
@@ -83,11 +86,33 @@ async function seedSwap(db: Database): Promise<void> {
       ],
     },
   ];
+  // A second swap under a non-canonical DRUID: addrE's 3 LNGX for addrF's 2 LNGX.
+  const odd = (to: string, amount: string) => ({
+    druid: ODD_DRUID, participants: 2, genesis_hash: null,
+    expectations: [{ from: "ins-hash", to, asset: { Token: amount } }],
+  });
+  const oddTxs = [
+    {
+      hash: "f2", druidInfo: null, ins: [] as { prev: string; n: number; from: string }[],
+      outs: [
+        { to: "addrE", valueType: "token", amount: R(3), genesisHash: null },
+        { to: "addrF", valueType: "token", amount: R(2), genesisHash: null },
+      ],
+    },
+    {
+      hash: "oA", druidInfo: odd("addrE", R(2)), ins: [{ prev: "f2", n: 0, from: "addrE" }],
+      outs: [{ to: "addrF", valueType: "token", amount: R(3), genesisHash: null }],
+    },
+    {
+      hash: "oB", druidInfo: odd("addrF", R(3)), ins: [{ prev: "f2", n: 1, from: "addrF" }],
+      outs: [{ to: "addrE", valueType: "token", amount: R(2), genesisHash: null }],
+    },
+  ];
   const outIds = new Map<string, number>();
-  for (const t of txs) {
+  for (const t of [...txs, ...oddTxs]) {
     const [row] = await db.insert(schema.transaction).values({
       hash: t.hash, blockHash: "H1", version: t.druidInfo ? 2 : 1, coinbase: false,
-      druidInfo: t.druidInfo, druid: t.druidInfo ? SWAP_DRUID : null,
+      druidInfo: t.druidInfo, druid: t.druidInfo ? t.druidInfo.druid : null,
     }).returning({ id: schema.transaction.id });
     const txId = row!.id;
     for (const [n, o] of t.outs.entries()) {

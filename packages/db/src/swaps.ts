@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, lte, sql } from "drizzle-orm";
 import type { Database } from "./client.js";
 import { block, transaction, txInExpanded, txOut } from "./schema.js";
 import {
@@ -160,6 +160,12 @@ export function buildSwap(druid: string, halves: SwapHalf[]): Swap {
   };
 }
 
+// DRUIDs are chosen by clients and nothing stops one being reused, so the
+// number of transactions sharing a DRUID is unbounded. A real swap has a
+// handful of halves; beyond this many, only the oldest are loaded and the swap
+// reads as incomplete (it has more halves than participants either way).
+export const MAX_SWAP_HALVES = 50;
+
 export interface SwapWithHalves {
   swap: Swap;
   halves: SwapHalf[];
@@ -170,15 +176,30 @@ export interface SwapWithHalves {
  * hashes, one batched detail load. DRUIDs with no indexed transaction are
  * simply absent from the result.
  */
-export async function getSwapsByDruids(db: Database, druids: string[]): Promise<Map<string, SwapWithHalves>> {
+export async function getSwapsByDruids(
+  db: Database,
+  druids: string[],
+  opts: { maxHalves?: number } = {},
+): Promise<Map<string, SwapWithHalves>> {
   const wanted = [...new Set(druids)];
   if (wanted.length === 0) return new Map();
-  const rows = await db
-    .select({ hash: transaction.hash, druid: transaction.druid, blockNum: block.num })
+  const maxHalves = Math.max(Math.trunc(opts.maxHalves ?? MAX_SWAP_HALVES), 1);
+  // Rank each DRUID's transactions oldest-first and keep only the first
+  // `maxHalves`, so a reused DRUID cannot make a list row arbitrarily large.
+  const ranked = db
+    .select({
+      hash: transaction.hash, druid: transaction.druid, blockNum: block.num, id: transaction.id,
+      rank: sql<number>`row_number() over (partition by ${transaction.druid} order by ${block.num}, ${transaction.id})`.as("rank"),
+    })
     .from(transaction)
     .innerJoin(block, eq(block.hash, transaction.blockHash))
     .where(inArray(transaction.druid, wanted))
-    .orderBy(asc(block.num), asc(transaction.id));
+    .as("ranked");
+  const rows = await db
+    .select({ hash: ranked.hash, druid: ranked.druid, blockNum: ranked.blockNum })
+    .from(ranked)
+    .where(lte(ranked.rank, maxHalves))
+    .orderBy(asc(ranked.blockNum), asc(ranked.id));
   const details = await loadTxDetails(db, rows.map((r) => r.hash));
   const detailByHash = new Map(details.map((d) => [d.hash, d]));
   const halvesByDruid = new Map<string, SwapHalf[]>();
@@ -246,8 +267,12 @@ export async function getSwaps(
 export type ActivityItem = ({ kind: "tx" } & TxListItem) | ({ kind: "swap" } & Swap);
 
 // Transactions are grouped so a swap's halves form one row: by DRUID when there
-// is one, otherwise each transaction is its own group.
-const GROUP_KEY = sql`coalesce(t.druid, t.hash)`;
+// is one, otherwise each transaction is its own group. The two parts are kept
+// as separate columns, never merged into one key: a DRUID is a client-chosen
+// string and may equal some unrelated transaction's hash.
+const GROUP_BY = sql`t.druid, case when t.druid is null then t.hash end`;
+// One group per distinct DRUID plus one per transaction without a DRUID.
+const GROUP_COUNT = sql`(count(distinct t.druid) + count(*) filter (where t.druid is null))::int`;
 
 interface GroupRow extends Record<string, unknown> {
   druid: string | null;
@@ -267,17 +292,17 @@ export async function getActivity(
   const { limit, offset } = clampPage(opts, 10, 1000);
   const dir = (opts.order ?? "desc") === "asc" ? sql`asc` : sql`desc`;
   const totalRows = await db.execute<{ total: number }>(sql`
-    select count(distinct ${GROUP_KEY})::int as total from ${transaction} t where t.coinbase = false
+    select ${GROUP_COUNT} as total from ${transaction} t where t.coinbase = false
   `);
   const total = totalRows[0]?.total ?? 0;
   if (total === 0) return { items: [], pagination: { total, limit, offset, hasMore: false } };
   // min(t.id) breaks ties between groups settling in the same block.
   const groups = await db.execute<GroupRow>(sql`
-    select max(t.druid) as druid, array_agg(t.hash order by t.id) as hashes, max(b.num)::int as num
+    select t.druid as druid, array_agg(t.hash order by t.id) as hashes, max(b.num)::int as num
     from ${transaction} t
     inner join ${block} b on b.hash = t."blockHash"
     where t.coinbase = false
-    group by ${GROUP_KEY}
+    group by ${GROUP_BY}
     order by max(b.num) ${dir}, min(t.id) ${dir}
     limit ${limit} offset ${offset}
   `);
@@ -324,16 +349,16 @@ export async function getAccountActivity(
     or exists (select 1 from ${txInExpanded} e where e."txHash" = t.hash and e."outScriptPublicKey" = ${address})
   )`;
   const totalRows = await db.execute<{ total: number }>(sql`
-    select count(distinct ${GROUP_KEY})::int as total from ${transaction} t where ${belongs}
+    select ${GROUP_COUNT} as total from ${transaction} t where ${belongs}
   `);
   const total = totalRows[0]?.total ?? 0;
   if (total === 0) return { items: [], pagination: { total: 0, limit, offset, hasMore: false } };
   const groups = await db.execute<GroupRow>(sql`
-    select max(t.druid) as druid, array_agg(t.hash order by t.id) as hashes, max(b.num)::int as num
+    select t.druid as druid, array_agg(t.hash order by t.id) as hashes, max(b.num)::int as num
     from ${transaction} t
     inner join ${block} b on b.hash = t."blockHash"
     where ${belongs}
-    group by ${GROUP_KEY}
+    group by ${GROUP_BY}
     order by max(b.num) desc, min(t.id) desc
     limit ${limit} offset ${offset}
   `);
