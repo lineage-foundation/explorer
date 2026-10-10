@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { SwapLeg } from "@explorer/db";
 import { formatLngx } from "../format.js";
-import { formatAsset, legsForAddress, summarise, swapHref } from "../swap.js";
+import { formatAsset, groupBySwap, legsForAddress, summarise, swapHref } from "../swap.js";
 
 const itemLeg: SwapLeg = {
   from: ["A"], to: "B", txHash: "hA", met: true,
@@ -49,5 +49,21 @@ describe("swapHref", () => {
   it("URL-encodes the druid", () => {
     expect(swapHref("DRUID0xab")).toBe("/swap/DRUID0xab");
     expect(swapHref("odd druid/1")).toBe("/swap/odd%20druid%2F1");
+  });
+});
+
+describe("groupBySwap", () => {
+  const row = (hash: string, druid: string | null) => ({ hash, druid });
+  it("collapses rows sharing a druid at the position of the first, keeping the rest in order", () => {
+    const rows = [row("cb", null), row("sA", "D1"), row("mid", null), row("sB", "D1"), row("x", "D2")];
+    expect(groupBySwap(rows)).toEqual([
+      { kind: "tx", row: rows[0] },
+      { kind: "swap", druid: "D1", rows: [rows[1], rows[3]] },
+      { kind: "tx", row: rows[2] },
+      { kind: "swap", druid: "D2", rows: [rows[4]] },
+    ]);
+  });
+  it("returns an empty list for no rows", () => {
+    expect(groupBySwap([])).toEqual([]);
   });
 });

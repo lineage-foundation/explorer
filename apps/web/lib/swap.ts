@@ -34,3 +34,32 @@ export function legsForAddress(
     received: swap.legs.filter((l) => l.to === address),
   };
 }
+
+export type SwapGroup<T> =
+  | { kind: "tx"; row: T }
+  | { kind: "swap"; druid: string; rows: T[] };
+
+/**
+ * Collapse rows that share a DRUID into one group, placed where the first of
+ * them appeared. For lists that are not paginated (a block's transactions);
+ * paginated lists are grouped in SQL instead.
+ */
+export function groupBySwap<T extends { druid: string | null }>(rows: T[]): SwapGroup<T>[] {
+  const groups: SwapGroup<T>[] = [];
+  const swapByDruid = new Map<string, T[]>();
+  for (const row of rows) {
+    if (row.druid === null) {
+      groups.push({ kind: "tx", row });
+      continue;
+    }
+    const existing = swapByDruid.get(row.druid);
+    if (existing) {
+      existing.push(row);
+      continue;
+    }
+    const bucket = [row];
+    swapByDruid.set(row.druid, bucket);
+    groups.push({ kind: "swap", druid: row.druid, rows: bucket });
+  }
+  return groups;
+}

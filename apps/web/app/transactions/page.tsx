@@ -1,4 +1,4 @@
-import { getTransactions } from "@explorer/db";
+import { getActivity } from "@explorer/db";
 import { EmptyState } from "@explorer/ui";
 import { getDb } from "../../lib/db.js";
 import { PageHeader } from "../components/PageHeader.js";
@@ -12,18 +12,18 @@ export default async function TransactionsPage(
 ) {
   const page = parsePage(await searchParams);
   const { db } = getDb();
-  const { transactions, pagination } = await getTransactions(db, {
+  const { items, pagination } = await getActivity(db, {
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   });
   return (
     <div>
       <PageHeader eyebrow="Chain" title="Transactions" />
-      {transactions.length === 0
+      {items.length === 0
         ? <EmptyState title="No transactions yet" />
         : (
           <>
-            <TxTable txs={transactions} />
+            <TxTable txs={items} />
             <Pagination page={page} hasMore={pagination.hasMore ?? false} basePath="/transactions" />
           </>
         )}
