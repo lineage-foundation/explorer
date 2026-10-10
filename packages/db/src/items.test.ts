@@ -12,7 +12,7 @@ const db = () => handle.db;
 
 const ALPHA_META = '{"title":"Alpha","note":"50%_off"}';
 
-interface SeedOut { to: string; amount: string; item?: string | null; meta?: string; token?: boolean }
+interface SeedOut { to: string; amount: string | null; item?: string | null; meta?: string; token?: boolean }
 interface SeedTx {
   hash: string; block: string; druid?: string;
   ins?: { prev: string; n: number; from: string }[];
@@ -39,6 +39,8 @@ const SEED: SeedTx[] = [
   // A transfer whose create transaction is not indexed.
   { hash: "orphan_xf", block: "ib3", outs: [{ to: "D", amount: "1", item: "missing_create" }] },
   { hash: "plain", block: "ib3", outs: [{ to: "P", amount: "5", token: true }] },
+  // A legacy-shaped row: an item output with no amount recorded.
+  { hash: "null_amt", block: "ib3", outs: [{ to: "N", amount: null, item: "it_null" }] },
 ];
 
 beforeAll(async () => {
@@ -231,5 +233,15 @@ describe("searchItems", () => {
     expect((await searchItems(db(), { genesis: "missing_create" })).items).toEqual([
       expect.objectContaining({ txHash: "orphan_xf", genesisHash: "missing_create", metadata: null, spent: false }),
     ]);
+  });
+});
+
+describe("item outputs with no amount recorded", () => {
+  it("count as zero for holders and address holdings instead of yielding null", async () => {
+    expect((await getItemHolders(db(), "it_null", {})).holders).toEqual([{ address: "N", amount: "0" }]);
+    expect((await getAddressItems(db(), "N", {})).items).toEqual([
+      { genesisHash: "it_null", amount: "0", metadata: null },
+    ]);
+    expect((await getItemTransfers(db(), "it_null", {})).transfers[0]?.to).toEqual([{ address: "N", amount: "0" }]);
   });
 });

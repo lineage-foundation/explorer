@@ -11,6 +11,7 @@ import { ItemMetadata } from "../../components/ItemMetadata.js";
 import { absoluteTime, relativeTime, truncateHash } from "../../../lib/format.js";
 import { groupDigits } from "../../../lib/detail.js";
 import { swapHref } from "../../../lib/swap.js";
+import { transferMoved } from "../../../lib/item.js";
 
 // Holders and history change as the item moves; keep the cache window short.
 export const revalidate = 20;
@@ -39,10 +40,6 @@ function decode(segment: string): string | null {
   } catch {
     return null;
   }
-}
-
-function sum(amounts: string[]): string {
-  return amounts.reduce((total, a) => total + (/^[0-9]+$/.test(a) ? BigInt(a) : 0n), 0n).toString();
 }
 
 export default async function ItemPage({
@@ -134,7 +131,8 @@ export default async function ItemPage({
                 <TBody>
                   {history.transfers.map((t) => {
                     const sender = t.from[0];
-                    const recipients = [...new Set(t.to.flatMap((o) => (o.address ? [o.address] : [])))];
+                    // What left the sender: change kept by the sender is not part of the transfer.
+                    const { recipients, quantity } = transferMoved(t);
                     const recipient = recipients[0];
                     return (
                       <TR key={t.txHash}>
@@ -176,7 +174,7 @@ export default async function ItemPage({
                               </>
                             )}
                         </TD>
-                        <TD><Mono>{groupDigits(sum(t.to.map((o) => o.amount)))}</Mono></TD>
+                        <TD><Mono>{groupDigits(quantity)}</Mono></TD>
                         <TD><span className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
                       </TR>
                     );

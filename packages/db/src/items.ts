@@ -150,7 +150,11 @@ export interface ItemHolder {
   amount: string;
 }
 
-/** Addresses holding the item now, largest holding first. */
+/**
+ * Addresses holding the item now, largest holding first. `tx_out.amount` is
+ * nullable, so an output with no amount recorded counts as zero rather than
+ * making the sum null.
+ */
 export async function getItemHolders(
   db: Database,
   genesis: string,
@@ -164,11 +168,11 @@ export async function getItemHolders(
   const total = totalRows[0]?.total ?? 0;
   if (total === 0) return { holders: [], pagination: { total, limit, offset, hasMore: false } };
   const holders = await db.execute<{ address: string; amount: string }>(sql`
-    select o."scriptPublicKey" as address, sum(o.amount)::text as amount
+    select o."scriptPublicKey" as address, coalesce(sum(o.amount), 0)::text as amount
     from ${txOut} o
     where ${held}
     group by o."scriptPublicKey"
-    order by sum(o.amount) desc, o."scriptPublicKey" asc
+    order by coalesce(sum(o.amount), 0) desc, o."scriptPublicKey" asc
     limit ${limit} offset ${offset}
   `);
   return {
@@ -280,7 +284,7 @@ export async function getAddressItems(
   const total = totalRows[0]?.total ?? 0;
   if (total === 0) return { items: [], pagination: { total, limit, offset, hasMore: false } };
   const page = await db.execute<{ genesis: string; amount: string }>(sql`
-    select o."itemGenesis" as genesis, sum(o.amount)::text as amount
+    select o."itemGenesis" as genesis, coalesce(sum(o.amount), 0)::text as amount
     from ${txOut} o
     where ${held}
     group by o."itemGenesis"

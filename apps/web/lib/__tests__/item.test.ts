@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { itemHref, metadataPreview, metadataRows } from "../item.js";
+import { itemHref, metadataPreview, metadataRows, transferMoved } from "../item.js";
 
 describe("metadataRows", () => {
   it("turns a JSON object into key/value rows, keeping key order", () => {
@@ -40,5 +40,33 @@ describe("itemHref", () => {
   it("URL-encodes the genesis hash", () => {
     expect(itemHref("g42df")).toBe("/item/g42df");
     expect(itemHref("g12/3 4")).toBe("/item/g12%2F3%204");
+  });
+});
+
+describe("transferMoved", () => {
+  const out = (address: string | null, amount: string) => ({ address, amount });
+
+  it("excludes what the sender kept from the recipients and the quantity", () => {
+    // A sends 2 to B and keeps 1.
+    expect(transferMoved({ from: ["A"], to: [out("B", "2"), out("A", "1")], created: false }))
+      .toEqual({ recipients: ["B"], quantity: "2" });
+  });
+  it("lists each recipient once and sums their outputs", () => {
+    expect(transferMoved({ from: ["A"], to: [out("B", "1"), out("B", "1"), out("C", "3")], created: false }))
+      .toEqual({ recipients: ["B", "C"], quantity: "5" });
+  });
+  it("counts every output for the create transaction", () => {
+    expect(transferMoved({ from: [], to: [out("A", "3")], created: true })).toEqual({ recipients: ["A"], quantity: "3" });
+  });
+  it("counts every output when the sender is unknown", () => {
+    expect(transferMoved({ from: [], to: [out("B", "2")], created: false })).toEqual({ recipients: ["B"], quantity: "2" });
+  });
+  it("shows a transfer entirely back to the sender as such, not as nothing", () => {
+    expect(transferMoved({ from: ["A"], to: [out("A", "2"), out("A", "1")], created: false }))
+      .toEqual({ recipients: ["A"], quantity: "3" });
+  });
+  it("ignores outputs with no address as recipients and malformed amounts in the sum", () => {
+    expect(transferMoved({ from: ["A"], to: [out(null, "2"), out("B", "x")], created: false }))
+      .toEqual({ recipients: ["B"], quantity: "2" });
   });
 });

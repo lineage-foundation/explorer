@@ -572,10 +572,15 @@ export async function searchItems(
   if (opts.genesis) filters.push(eq(txOut.itemGenesis, opts.genesis));
   if (opts.q) {
     const pattern = `%${escapeLike(opts.q)}%`;
-    // Both arms can use the trigram index on itemMetadata.
-    filters.push(sql`(
-      ${txOut.itemMetadata} ilike ${pattern}
-      or ${txOut.itemGenesis} in (
+    // Outputs whose own metadata matches, plus every output of an item whose
+    // creation metadata matches. Written as `id IN (… UNION …)` rather than an
+    // OR so each arm is an index scan (trigram on itemMetadata, then
+    // itemGenesis) joined back by primary key; an `OR … IN (subquery)` makes
+    // Postgres scan the whole table.
+    filters.push(sql`${txOut.id} in (
+      select m.id from "tx_out" m where m."itemMetadata" ilike ${pattern}
+      union
+      select t.id from "tx_out" t where t."itemGenesis" in (
         select c."txHash" from "tx_out" c
         where c."valueType" = 'item' and c."genesisHash" is null and c."itemMetadata" ilike ${pattern}
       )

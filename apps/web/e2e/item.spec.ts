@@ -77,3 +77,13 @@ test("item API returns the item, its holder and its history", async ({ request }
   expect(held.data).toEqual([{ genesisHash: ITEM_GENESIS, amount: "1", metadata: '{"title":"Seed Relic","medium":"digital"}' }]);
   expect((await request.get("/api/v1/items/t1")).status()).toBe(404);
 });
+
+test("an item output with no recorded amount does not break the pages that list it", async ({ page, request }) => {
+  // The seed's gen1 output on addrA has a null amount.
+  const res = await page.goto("/address/addrA");
+  expect(res?.status()).toBe(200);
+  const held = page.locator("section", { has: page.getByRole("heading", { name: "Items held" }) });
+  await expect(held.locator('a[href="/item/gen1"]')).toBeVisible();
+  const body = await (await request.get("/api/v1/addresses/addrA/items")).json();
+  expect(body.data).toEqual([expect.objectContaining({ genesisHash: "gen1", amount: "0" })]);
+});
