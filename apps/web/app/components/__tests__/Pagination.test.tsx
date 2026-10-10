@@ -5,7 +5,8 @@ vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));
 
-import { parsePage } from "../Pagination.js";
+import { render, screen } from "@testing-library/react";
+import { Pagination, parsePage } from "../Pagination.js";
 
 describe("parsePage", () => {
   it("defaults to 1 for missing, non-numeric, or below-range input", () => {
@@ -20,5 +21,34 @@ describe("parsePage", () => {
   });
   it("clamps an absurdly large page to the max, bounding SQL offset", () => {
     expect(parsePage({ page: "999999999" })).toBe(4000);
+  });
+});
+
+describe("parsePage with a named parameter", () => {
+  it("reads the page from another query parameter", () => {
+    expect(parsePage({ holders: "4", page: "9" }, "holders")).toBe(4);
+    expect(parsePage({ page: "9" }, "holders")).toBe(1);
+  });
+});
+
+describe("Pagination", () => {
+  const hrefs = () => screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+
+  it("links to the previous and next page", () => {
+    render(<Pagination page={2} hasMore basePath="/blocks" />);
+    expect(hrefs()).toEqual(["/blocks?page=1", "/blocks?page=3"]);
+  });
+
+  it("uses a custom parameter and keeps the other query values", () => {
+    render(<Pagination page={2} hasMore basePath="/item/g1" param="holders" query={{ page: "5", q: "a b&c" }} />);
+    expect(hrefs()).toEqual([
+      "/item/g1?page=5&q=a+b%26c&holders=1",
+      "/item/g1?page=5&q=a+b%26c&holders=3",
+    ]);
+  });
+
+  it("drops empty query values and never duplicates its own parameter", () => {
+    render(<Pagination page={1} hasMore basePath="/items" query={{ q: "", page: "7" }} />);
+    expect(hrefs()).toEqual(["/items?page=2"]);
   });
 });
