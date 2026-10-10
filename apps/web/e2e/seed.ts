@@ -1,4 +1,4 @@
-import { createDb, schema } from "@explorer/db";
+import { createDb, schema, type Database } from "@explorer/db";
 import { resetTestSchema } from "@explorer/db/test-support";
 
 const URL = process.env.DATABASE_URL ?? "postgres://explorer:explorer@127.0.0.1:5432/explorer_test";
@@ -42,9 +42,72 @@ export async function seed(): Promise<void> {
     await db.insert(schema.coinsHistory).values([
       { address: "addrB", date: new Date("2024-01-02T00:00:00Z"), outIds: [3] },
     ]);
+    await seedSwap(db);
   } finally {
     await close();
   }
+}
+
+export const SWAP_DRUID = `DRUID0x${"ab".repeat(16)}`;
+
+// A two-way swap in block 1 between two addresses of its own (addrC, addrD), so
+// the balances and counts the other specs assert are untouched:
+//   f1 funds addrC with 10 LNGX and addrD with one gen2 item;
+//   sA — addrD gives the item to addrC, expecting 4 LNGX;
+//   sB — addrC pays addrD 4 LNGX (6 LNGX change), expecting the item.
+async function seedSwap(db: Database): Promise<void> {
+  const R = (n: number) => (BigInt(n) * 72072000n).toString();
+  const item = { amount: "1", genesis_hash: "gen2", metadata: null };
+  const txs = [
+    {
+      hash: "f1", druidInfo: null,
+      ins: [] as { prev: string; n: number; from: string }[],
+      outs: [
+        { to: "addrC", valueType: "token", amount: R(10), genesisHash: null },
+        { to: "addrD", valueType: "item", amount: "1", genesisHash: "gen2" },
+      ],
+    },
+    {
+      hash: "sA",
+      druidInfo: { druid: SWAP_DRUID, participants: 2, genesis_hash: null, expectations: [{ from: "ins-hash", to: "addrD", asset: { Token: R(4) } }] },
+      ins: [{ prev: "f1", n: 1, from: "addrD" }],
+      outs: [{ to: "addrC", valueType: "item", amount: "1", genesisHash: "gen2" }],
+    },
+    {
+      hash: "sB",
+      druidInfo: { druid: SWAP_DRUID, participants: 2, genesis_hash: null, expectations: [{ from: "ins-hash", to: "addrC", asset: { Item: item } }] },
+      ins: [{ prev: "f1", n: 0, from: "addrC" }],
+      outs: [
+        { to: "addrD", valueType: "token", amount: R(4), genesisHash: null },
+        { to: "addrC", valueType: "token", amount: R(6), genesisHash: null },
+      ],
+    },
+  ];
+  const outIds = new Map<string, number>();
+  for (const t of txs) {
+    const [row] = await db.insert(schema.transaction).values({
+      hash: t.hash, blockHash: "H1", version: t.druidInfo ? 2 : 1, coinbase: false,
+      druidInfo: t.druidInfo, druid: t.druidInfo ? SWAP_DRUID : null,
+    }).returning({ id: schema.transaction.id });
+    const txId = row!.id;
+    for (const [n, o] of t.outs.entries()) {
+      const [out] = await db.insert(schema.txOut).values({
+        txId, txHash: t.hash, valueType: o.valueType, amount: o.amount, locktime: "0",
+        genesisHash: o.genesisHash, scriptPublicKey: o.to, n,
+      }).returning({ id: schema.txOut.id });
+      outIds.set(`${t.hash}:${n}`, out!.id);
+    }
+    for (const i of t.ins) {
+      const common = { txId, txHash: t.hash, previousOutTxHash: i.prev, previousOutTxN: i.n, scriptSignature: {} };
+      await db.insert(schema.txIn).values(common);
+      await db.insert(schema.txInExpanded).values({ ...common, outScriptPublicKey: i.from });
+    }
+  }
+  const date = new Date("2024-01-02T00:00:00Z");
+  await db.insert(schema.coinsHistory).values([
+    { address: "addrC", date, blockNum: 1, outIds: [outIds.get("sB:1")] },
+    { address: "addrD", date, blockNum: 1, outIds: [outIds.get("sB:0")] },
+  ]);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
