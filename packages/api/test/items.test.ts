@@ -17,8 +17,8 @@ beforeAll(async () => {
     { hash: "tx_item2", blockHash: "b_hash_2", version: 1, coinbase: false },
   ]);
   await handle.db.insert(schema.txOut).values([
-    { txId: 4, txHash: "tx_item1", valueType: "item", amount: "123456789012345678", locktime: "0", scriptPublicKey: "owner_x", genesisHash: "gen_1", itemMetadata: '{"name":"Relic","rarity":"epic"}', n: 0 },
-    { txId: 5, txHash: "tx_item2", valueType: "item", amount: "1", locktime: "0", scriptPublicKey: "owner_y", genesisHash: "gen_2", itemMetadata: "dragon scale", n: 0 },
+    { txId: 4, txHash: "tx_item1", valueType: "item", amount: "123456789012345678", locktime: "0", scriptPublicKey: "owner_x", genesisHash: "gen_1", itemGenesis: "gen_1", itemMetadata: '{"name":"Relic","rarity":"epic"}', n: 0 },
+    { txId: 5, txHash: "tx_item2", valueType: "item", amount: "1", locktime: "0", scriptPublicKey: "owner_y", genesisHash: "gen_2", itemGenesis: "gen_2", itemMetadata: "dragon scale", n: 0 },
   ]);
 });
 afterAll(async () => { await handle.close(); });

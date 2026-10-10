@@ -98,8 +98,58 @@ export async function seedSwapFixtures(db: Database): Promise<void> {
     const txId = row!.id;
     await db.insert(txOut).values(t.outs.map((o, n) => ({
       txId, txHash: t.hash, valueType: o.kind ?? "token", amount: o.amount, locktime: "0",
-      genesisHash: o.genesis ?? null, scriptPublicKey: o.to, n,
+      genesisHash: o.genesis ?? null, itemGenesis: o.kind === "item" ? (o.genesis ?? t.hash) : null,
+      scriptPublicKey: o.to, n,
     })));
+    for (const i of t.ins ?? []) {
+      const common = { txId, txHash: t.hash, scriptSignature: {}, previousOutTxHash: i.prev, previousOutTxN: i.n };
+      await db.insert(txIn).values(common);
+      await db.insert(txInExpanded).values({ ...common, outScriptPublicKey: i.from });
+    }
+  }
+}
+
+export const ALPHA_META = '{"title":"Alpha","note":"50%_off"}';
+
+/**
+ * Items in a block of their own, on top of seedFixtures (kept out of the shared
+ * seed so other route tests' counts do not shift):
+ *   it_a  — 3 units created to A; B now holds 2 (in two outputs), A holds 1
+ *   it_b  — 1 unit to C, no metadata, never transferred
+ *   it_c  — 1 unit to C, metadata that is not JSON
+ *   plain — an ordinary token transaction
+ */
+export async function seedItemFixtures(db: Database): Promise<void> {
+  const { block, transaction, txIn, txOut, txInExpanded } = schema;
+  await db.insert(block).values([
+    { version: 1, num: 30, hash: "b_items", previousHash: "b_hash_2", timestamp: new Date("2024-02-01T00:00:00Z"), nbTx: 6 },
+  ]);
+  type Out = { to: string; amount: string; item?: string | null; meta?: string; token?: boolean };
+  const txs: { hash: string; ins?: { prev: string; n: number; from: string }[]; outs: Out[] }[] = [
+    { hash: "it_a", outs: [{ to: "A", amount: "3", item: null, meta: ALPHA_META }] },
+    {
+      hash: "xf_1", ins: [{ prev: "it_a", n: 0, from: "A" }],
+      outs: [{ to: "B", amount: "2", item: "it_a" }, { to: "A", amount: "1", item: "it_a" }],
+    },
+    { hash: "it_b", outs: [{ to: "C", amount: "1", item: null }] },
+    {
+      hash: "xf_2", ins: [{ prev: "xf_1", n: 0, from: "B" }],
+      outs: [{ to: "B", amount: "1", item: "it_a" }, { to: "B", amount: "1", item: "it_a" }],
+    },
+    { hash: "it_c", outs: [{ to: "C", amount: "1", item: null, meta: "not json <b>x</b>" }] },
+    { hash: "plain", outs: [{ to: "P", amount: "5", token: true }] },
+  ];
+  for (const t of txs) {
+    const [row] = await db.insert(transaction).values({
+      hash: t.hash, blockHash: "b_items", version: 1, coinbase: false,
+    }).returning({ id: transaction.id });
+    const txId = row!.id;
+    await db.insert(txOut).values(t.outs.map((o, n) => (o.token
+      ? { txId, txHash: t.hash, valueType: "token", amount: o.amount, locktime: "0", scriptPublicKey: o.to, n }
+      : {
+        txId, txHash: t.hash, valueType: "item", amount: o.amount, locktime: "0", scriptPublicKey: o.to, n,
+        genesisHash: o.item ?? null, itemGenesis: o.item ?? t.hash, itemMetadata: o.meta ?? null,
+      })));
     for (const i of t.ins ?? []) {
       const common = { txId, txHash: t.hash, scriptSignature: {}, previousOutTxHash: i.prev, previousOutTxN: i.n };
       await db.insert(txIn).values(common);

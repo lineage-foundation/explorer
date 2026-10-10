@@ -17,6 +17,7 @@ describe("getOpenApiDocument", () => {
       "/api/v1/addresses/{address}", "/api/v1/addresses/{address}/transactions",
       "/api/v1/items", "/api/v1/supply", "/api/v1/status",
       "/api/v1/swaps", "/api/v1/swaps/{druid}",
+      "/api/v1/items/{genesis}", "/api/v1/items/{genesis}/transfers", "/api/v1/addresses/{address}/items",
     ]) {
       expect(Object.keys(doc.paths)).toContain(path);
     }
@@ -29,6 +30,6 @@ describe("getOpenApiDocument", () => {
     expect(doc.components?.schemas).toBeTruthy();
     expect(Object.keys(doc.components?.schemas ?? {}).length).toBeGreaterThan(5);
     expect(doc.paths["/api/v1/swaps"]?.get?.tags).toEqual(["Swaps"]);
-    expect(Object.keys(doc.components?.schemas ?? {})).toEqual(expect.arrayContaining(["Swap", "SwapList"]));
+    expect(Object.keys(doc.components?.schemas ?? {})).toEqual(expect.arrayContaining(["Swap", "SwapList", "Item", "ItemTransferList", "AddressItemList"]));
   });
 });
