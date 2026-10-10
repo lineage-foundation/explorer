@@ -5,6 +5,7 @@ import { getTransactionByHash, getBlockByHashOrNumber, getMaxBlockNum, getSwapBy
 import { PageHeader } from "../../components/PageHeader.js";
 import { InputsOutputs } from "../../components/InputsOutputs.js";
 import { SwapBanner } from "../../components/SwapBanner.js";
+import { ItemLink } from "../../components/ItemLink.js";
 import { JsonBlock } from "../../components/JsonBlock.js";
 import { Card, Pill, CopyButton } from "@explorer/ui";
 import {
@@ -37,6 +38,8 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
   const coinbase = block?.nonceAndMiningTxHash && Array.isArray(block.nonceAndMiningTxHash)
     ? block.nonceAndMiningTxHash[1] === tx.hash
     : false;
+  // A creation output has no genesis hash on chain: this transaction is the item.
+  const createsItem = tx.outs.some((o) => o.valueType === "item" && o.genesisHash === null);
   const firstOut = tx.outs[0]?.valueType;
   const label = txTypeLabel(firstOut, coinbase);
 
@@ -51,6 +54,14 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
             : <Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill>}
         </div>
       </div>
+      {createsItem && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-display text-sm text-text">Creates item</span>
+            <ItemLink genesis={tx.hash} />
+          </div>
+        </Card>
+      )}
       {tx.druid !== null && (
         <SwapBanner
           druid={tx.druid}

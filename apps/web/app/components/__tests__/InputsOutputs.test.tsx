@@ -59,8 +59,10 @@ describe("InputsOutputs", () => {
     expect(container.textContent).toContain("0 LNGX out");
     expect(container.textContent).toContain("· 1 item");
     expect(screen.getAllByText("× 1")).toHaveLength(2);
-    const genesisLinks = screen.getAllByRole("link").filter((a) => a.getAttribute("href") === "/transaction/gen1");
-    expect(genesisLinks).toHaveLength(2);
+    // Both the spent item and the item output link to the item's own page.
+    const itemLinks = screen.getAllByRole("link").filter((a) => a.getAttribute("href") === "/item/gen1");
+    expect(itemLinks).toHaveLength(2);
+    expect(screen.getAllByRole("link").some((a) => a.getAttribute("href") === "/transaction/gen1")).toBe(false);
   });
 
   it("pluralises the item count from the outputs", () => {
@@ -87,6 +89,22 @@ describe("InputsOutputs", () => {
     expect(container.textContent).toContain("5 LNGX out");
     expect(container.textContent).not.toContain("item");
     expect(container.textContent).toContain("· change");
+  });
+});
+
+describe("InputsOutputs item links", () => {
+  it("links a creation output to the item it creates (the transaction itself)", () => {
+    const tx = detail([], [{ to: "addrA", amount: "1", kind: "item" }]);
+    // A creation output has no genesis hash on chain; its item is this transaction.
+    tx.outs[0]!.genesisHash = null;
+    tx.outs[0]!.itemGenesis = "h";
+    render(<InputsOutputs coinbase={false} tx={tx} />);
+    expect(screen.getAllByRole("link").map((a) => a.getAttribute("href"))).toContain("/item/h");
+  });
+
+  it("URL-encodes the genesis hash in item links", () => {
+    render(<InputsOutputs coinbase={false} tx={detail([], [{ to: "addrA", amount: "1", kind: "item", genesis: "g 1/2" }])} />);
+    expect(screen.getAllByRole("link").map((a) => a.getAttribute("href"))).toContain("/item/g%201%2F2");
   });
 });
 

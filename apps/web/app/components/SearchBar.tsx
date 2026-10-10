@@ -8,6 +8,7 @@ function glyph(kind: Suggestion["kind"]): string {
   if (kind === "block") return "▣";
   if (kind === "tx") return "↔";
   if (kind === "swap") return "⇄";
+  if (kind === "item") return "◆";
   return "◈";
 }
 

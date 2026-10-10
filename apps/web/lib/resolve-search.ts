@@ -1,11 +1,12 @@
 import type { Database } from "@explorer/db";
-import { getBlockHashByNum, getSwapByDruid, searchByPrefix } from "@explorer/db";
+import { getBlockHashByNum, getItem, getSwapByDruid, searchByPrefix } from "@explorer/db";
 import { truncateHash } from "./format.js";
 import { DRUID_RE } from "./search.js";
 import { swapHref } from "./swap.js";
+import { itemHref } from "./item.js";
 
 export interface Suggestion {
-  kind: "block" | "tx" | "address" | "swap";
+  kind: "block" | "tx" | "address" | "swap" | "item";
   label: string;
   sublabel?: string;
   href: string;
@@ -63,6 +64,13 @@ export async function resolveSearch(db: Database, query: string): Promise<Sugges
     suggestions.push({
       kind: "address", label: `Address ${truncateHash(q)}`, href: `/address/${q}`, found: true,
     });
+  }
+
+  // An item is identified by its create transaction's hash, so a complete
+  // transaction hash may also be an item. Offer it alongside the transaction.
+  const capped = suggestions.slice(0, LIMIT - 1);
+  if (/^g[a-f0-9]{31}$/i.test(q) && (await getItem(db, q)) !== null) {
+    return [...capped, { kind: "item", label: `Item ${truncateHash(q)}`, href: itemHref(q), found: true }];
   }
 
   return suggestions.slice(0, LIMIT);

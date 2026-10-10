@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getAccountBalance, getAccountActivity } from "@explorer/db";
+import { getAccountBalance, getAccountActivity, getAddressItems } from "@explorer/db";
 import {
   Stat, Table, THead, TBody, TR, TH, TD, Mono, Pill, CopyButton, EmptyState,
 } from "@explorer/ui";
@@ -10,10 +10,13 @@ import { Pagination, parsePage } from "../../components/Pagination.js";
 import { formatLngx, relativeTime, truncateHash } from "../../../lib/format.js";
 import { netForAddress, swapLinesForAddress } from "../../../lib/tx.js";
 import { swapHref } from "../../../lib/swap.js";
+import { metadataPreview } from "../../../lib/item.js";
+import { ItemLink } from "../../components/ItemLink.js";
 import { groupDigits } from "../../../lib/detail.js";
 
 export const revalidate = 20;
 const PAGE_SIZE = 25;
+const ITEMS_SHOWN = 25;
 
 export default async function AddressPage({
   params, searchParams,
@@ -21,9 +24,10 @@ export default async function AddressPage({
   const { id } = await params;
   const page = parsePage(await searchParams);
   const { db } = getDb();
-  const [{ balance }, { items, pagination }] = await Promise.all([
+  const [{ balance }, { items, pagination }, held] = await Promise.all([
     getAccountBalance(db, id),
     getAccountActivity(db, id, { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
+    getAddressItems(db, id, { limit: ITEMS_SHOWN }),
   ]);
 
   return (
@@ -40,6 +44,28 @@ export default async function AddressPage({
           <CopyButton value={id} />
         </span>
       </div>
+      {held.pagination.total > 0 && (
+        <section>
+          <h2 className="mb-2 font-display text-lg text-text">Items held</h2>
+          <Table>
+            <THead><TR><TH>Item</TH><TH>Quantity</TH><TH>Metadata</TH></TR></THead>
+            <TBody>
+              {held.items.map((item) => (
+                <TR key={item.genesisHash}>
+                  <TD><ItemLink genesis={item.genesisHash} /></TD>
+                  <TD><Mono>{groupDigits(item.amount)}</Mono></TD>
+                  <TD><Mono className="break-all text-xs text-text-muted">{metadataPreview(item.metadata)}</Mono></TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+          {held.pagination.total > held.items.length && (
+            <div className="mt-2 font-mono text-xs text-text-subtle">
+              {`Showing ${held.items.length} of ${held.pagination.total.toLocaleString("en-US")}`}
+            </div>
+          )}
+        </section>
+      )}
       <section>
         <h2 className="mb-2 font-display text-lg text-text">Transactions</h2>
         {items.length === 0

@@ -23,7 +23,7 @@ describe("SwapSummary", () => {
     render(<SwapSummary swap={{ legs: [itemLeg, tokenLeg] }} />);
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toEqual(expect.arrayContaining([
-      "/address/addrA", "/address/addrB", "/transaction/gen1",
+      "/address/addrA", "/address/addrB", "/item/gen1",
     ]));
     expect(screen.getByText("1 LNGX")).toBeInTheDocument();
     expect(screen.getByText("× 1")).toBeInTheDocument();
