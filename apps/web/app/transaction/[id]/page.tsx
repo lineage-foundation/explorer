@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getDb } from "../../../lib/db.js";
-import { getTransactionByHash, getBlockByHashOrNumber, getMaxBlockNum } from "@explorer/db";
+import { getTransactionByHash, getBlockByHashOrNumber, getMaxBlockNum, getSwapByDruid } from "@explorer/db";
 import { PageHeader } from "../../components/PageHeader.js";
 import { InputsOutputs } from "../../components/InputsOutputs.js";
+import { SwapBanner } from "../../components/SwapBanner.js";
 import { JsonBlock } from "../../components/JsonBlock.js";
 import { Card, Pill, CopyButton } from "@explorer/ui";
 import {
@@ -29,7 +30,10 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
   // maxNum is independent of the tx, so fetch it in parallel instead of last.
   const [tx, maxNum] = await Promise.all([getTransactionByHash(db, id), getMaxBlockNum(db)]);
   if (!tx) notFound();
-  const block = await getBlockByHashOrNumber(db, tx.blockHash);
+  const [block, swap] = await Promise.all([
+    getBlockByHashOrNumber(db, tx.blockHash),
+    tx.druid !== null ? getSwapByDruid(db, tx.druid) : null,
+  ]);
   const coinbase = block?.nonceAndMiningTxHash && Array.isArray(block.nonceAndMiningTxHash)
     ? block.nonceAndMiningTxHash[1] === tx.hash
     : false;
@@ -41,9 +45,18 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
       <div>
         <PageHeader eyebrow="Transaction" title={truncateHash(tx.hash, 10, 8)} />
         <div className="-mt-4 flex flex-wrap items-center gap-2 break-all font-mono text-sm text-text">
-          <CopyButton value={tx.hash} /> <Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill>
+          <CopyButton value={tx.hash} />{" "}
+          {tx.druid !== null
+            ? <Pill tone="swap">swap</Pill>
+            : <Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill>}
         </div>
       </div>
+      {tx.druid !== null && (
+        <SwapBanner
+          druid={tx.druid}
+          counterparts={(swap?.swap.txHashes ?? []).filter((h) => h !== tx.hash)}
+        />
+      )}
       <Card className="p-4">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <MetaItem label="Block"><Link href={`/block/${tx.blockHash}`} className="text-link hover:text-link-hover">{block ? `#${block.num.toLocaleString()}` : "—"}</Link></MetaItem>

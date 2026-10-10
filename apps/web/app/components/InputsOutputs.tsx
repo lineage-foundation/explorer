@@ -30,8 +30,14 @@ function ScriptSig({ sig }: { sig: unknown }) {
 }
 
 export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolean }) {
-  const inTotal = sumAmounts(tx.ins.map((i) => i.amount));
+  // Totals are token-only: an item quantity is not an LNGX amount. Items moved
+  // are counted separately, from the outputs.
+  const inTotal = sumAmounts(tx.ins.filter((i) => i.valueType !== "item").map((i) => i.amount));
   const outTotal = sumAmounts(tx.outs.filter((o) => o.valueType === "token").map((o) => o.amount));
+  const hasItems = tx.ins.some((i) => i.valueType === "item") || tx.outs.some((o) => o.valueType === "item");
+  const itemCount = tx.outs
+    .filter((o) => o.valueType === "item")
+    .reduce((sum, o) => sum + (o.amount && /^[0-9]+$/.test(o.amount) ? BigInt(o.amount) : 0n), 0n);
   // Outputs back to an address the tx also spent from are flagged as change
   // below. (Change to a fresh address can't be detected on-chain, so the total
   // out is shown gross rather than guessing a net "sent" amount.)
@@ -42,6 +48,9 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
         {coinbase
           ? <span className="text-accent">newly minted → {outTotal} {TOKEN_TICKER}</span>
           : <><span>{inTotal} {TOKEN_TICKER} in</span><span className="text-accent">→</span><span>{outTotal} {TOKEN_TICKER} out</span></>}
+        {hasItems && (
+          <span className="text-text-muted">{`· ${itemCount.toLocaleString("en-US")} ${itemCount === 1n ? "item" : "items"}`}</span>
+        )}
       </div>
 
       <h3 className="mb-2 font-display text-sm text-text">Inputs <span className="font-mono text-xs text-text-subtle">· {coinbase ? "coinbase" : tx.ins.length}</span></h3>
@@ -58,8 +67,23 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
                   <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
                     {i.previousOutTxHash ? `spends ${truncateHash(i.previousOutTxHash, 6, 4)} : ${i.previousOutTxN ?? "?"}` : "coinbase"}
                   </div>
+                  {i.valueType === "item" && i.genesisHash && (
+                    <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
+                      genesis{" "}
+                      <Link href={`/transaction/${i.genesisHash}`} className="text-link hover:text-link-hover">
+                        {truncateHash(i.genesisHash, 8, 6)}
+                      </Link>
+                    </div>
+                  )}
                 </div>
-                <Mono className="text-xs">{i.amount ? `${formatLngx(i.amount)} ${TOKEN_TICKER}` : "—"}</Mono>
+                {i.valueType === "item"
+                  ? (
+                    <div className="shrink-0 text-right">
+                      <Tag>item</Tag>
+                      {i.amount && <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">× {i.amount}</div>}
+                    </div>
+                  )
+                  : <Mono className="text-xs">{i.amount ? `${formatLngx(i.amount)} ${TOKEN_TICKER}` : "—"}</Mono>}
               </div>
               <ScriptSig sig={i.scriptSignature} />
             </div>
