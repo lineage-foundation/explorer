@@ -5,6 +5,7 @@ import { registerTransactions } from "./routes/transactions.js";
 import { registerAddresses } from "./routes/addresses.js";
 import { registerItems } from "./routes/items.js";
 import { registerMeta } from "./routes/meta.js";
+import { registerSwaps } from "./routes/swaps.js";
 import { OPENAPI_INFO } from "./openapi-info.js";
 
 /**
@@ -21,6 +22,7 @@ export function getOpenApiDocument(): Record<string, unknown> {
   registerTransactions(app, db);
   registerAddresses(app, db);
   registerItems(app, db);
+  registerSwaps(app, db);
   registerMeta(app, db);
   return app.getOpenAPI31Document(OPENAPI_INFO) as unknown as Record<string, unknown>;
 }

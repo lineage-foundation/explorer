@@ -8,6 +8,12 @@ import {
 import { CACHE, classifyTxType } from "../helpers.js";
 import { ProblemError } from "../problem.js";
 
+// LNGX rendering of an amount, for token amounts only. An item quantity is not
+// a token amount, so it has none.
+function tokenLngx(valueType: string | null, amount: string | null): string | null {
+  return valueType === "item" || amount === null ? null : formatLngxPlain(amount);
+}
+
 export function serializeTransaction(t: TxDetail) {
   return {
     hash: t.hash,
@@ -15,10 +21,13 @@ export function serializeTransaction(t: TxDetail) {
     version: t.version,
     timestamp: t.timestamp ? t.timestamp.toISOString() : null,
     type: classifyTxType(t.outs[0]?.valueType, t.coinbase),
+    druid: t.druid,
     inputs: t.ins.map((i) => ({
       fromAddress: i.fromAddress,
+      valueType: i.valueType,
+      genesisHash: i.genesisHash,
       amount: i.amount,
-      amountLngx: i.amount !== null ? formatLngxPlain(i.amount) : null,
+      amountLngx: tokenLngx(i.valueType, i.amount),
       previousOutTxHash: i.previousOutTxHash,
       previousOutTxN: i.previousOutTxN,
     })),
@@ -26,7 +35,7 @@ export function serializeTransaction(t: TxDetail) {
       n: o.n,
       valueType: o.valueType,
       amount: o.amount,
-      amountLngx: o.amount !== null ? formatLngxPlain(o.amount) : null,
+      amountLngx: tokenLngx(o.valueType, o.amount),
       address: o.scriptPublicKey,
       locktime: o.locktime,
       genesisHash: o.genesisHash,
@@ -58,6 +67,7 @@ export function registerTransactions(app: OpenAPIHono, db: Database): void {
           hash: t.hash, blockHash: t.blockHash, version: t.version,
           timestamp: t.timestamp ? t.timestamp.toISOString() : null,
           type: classifyTxType(t.txType, false),
+          druid: t.druid,
         })),
         pagination: { ...pagination, hasMore: pagination.hasMore ?? false },
       });

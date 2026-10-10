@@ -83,6 +83,7 @@ export function registerBlocks(app: OpenAPIHono, db: Database): void {
           timestamp: t.timestamp ? t.timestamp.toISOString() : null,
           type: classifyTxType(t.txType, t.coinbase),
           coinbase: t.coinbase,
+          druid: t.druid,
         })),
       }, 200);
     },
