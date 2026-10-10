@@ -25,6 +25,8 @@ export function createWorker(deps: {
   const lock = createAdvisoryLock(sql);
 
   let running = false;
+  // Set by stop(); ends the wait for a busy lock.
+  let stopped = false;
   let supplyTimer: NodeJS.Timeout | null = null;
   let healthServer: ReturnType<typeof createHealthServer> | null = null;
   let loopPromise: Promise<void> | null = null;
@@ -82,6 +84,14 @@ export function createWorker(deps: {
       await ingestor.runCycle();
     },
     async start() {
+      // Listen before taking the lock. During a rolling deploy the outgoing
+      // instance holds the lock until the orchestrator sees this one healthy,
+      // so a health server that only came up after the lock would never be
+      // probed successfully and the deploy could not complete.
+      if (config.healthPort !== null) {
+        healthServer = createHealthServer({ port: config.healthPort, getStatus: () => status });
+        await healthServer.start();
+      }
       const acquired = await lock.tryAcquire();
       status.lockHeld = acquired;
       if (!acquired) {
@@ -89,14 +99,11 @@ export function createWorker(deps: {
         if (config.lockOnBusy === "exit") {
           process.exit(1);
         }
-        while (!(await lock.tryAcquire())) await sleep(config.pollIntervalMs);
+        while (!stopped && !(await lock.tryAcquire())) await sleep(config.pollIntervalMs);
+        if (stopped) return;
         status.lockHeld = true;
       }
       running = true;
-      if (config.healthPort !== null) {
-        healthServer = createHealthServer({ port: config.healthPort, getStatus: () => status });
-        await healthServer.start();
-      }
       await supplyCron.runOnce();
       status.lastSupplyUpdate = timestamp();
       supplyTimer = setInterval(() => {
@@ -108,7 +115,13 @@ export function createWorker(deps: {
       loopPromise = loop();
     },
     async stop() {
-      if (!running) return;
+      stopped = true;
+      if (!running) {
+        // Still waiting for the lock: nothing to drain or release.
+        if (healthServer) await healthServer.stop();
+        healthServer = null;
+        return;
+      }
       running = false;
       if (supplyTimer) clearInterval(supplyTimer);
       // Drain the in-flight cycle before releasing the lock: otherwise a

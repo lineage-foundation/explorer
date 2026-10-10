@@ -1,0 +1,144 @@
+name: Deploy
+
+# Deploys the explorer to Railway when a change lands on main.
+#
+# Runs AFTER the CI workflow completes for a push to main, via `workflow_run`,
+# and only when CI succeeded — so nothing that fails typecheck, tests, build or
+# e2e is ever deployed. `workflow_dispatch` remains for a manual redeploy of a
+# chosen ref.
+#
+# Order matters: the indexer image applies the database migrations when it
+# starts, and the web app reads whatever columns the newest migration adds. So
+# the indexer is deployed first and must come up before the web app is deployed;
+# deploying both at once can leave the web app querying columns that do not
+# exist yet.
+#
+# The explorer runs in the Railway project "services", environment "testnet",
+# as the services "indexer" and "web". Each builds its own Dockerfile from the
+# repo root, selected by its RAILWAY_DOCKERFILE_PATH variable.
+#
+# Setup (one-off, see README "Deployment"):
+#   secret   RAILWAY_TOKEN            a Railway *project* token for the
+#                                     "services" project, "testnet" environment
+#   variable RAILWAY_INDEXER_SERVICE  optional; defaults to "indexer"
+#   variable RAILWAY_WEB_SERVICE      optional; defaults to "web"
+#   variable EXPLORER_URL             optional; defaults to
+#                                     https://explorer.lineage.to
+# The indexer service has a healthcheck on /health so that "deployed" means
+# "migrations applied", and INDEXER_LOCK_ON_BUSY=wait so the new instance can
+# come up healthy while the old one still holds the indexer lock.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit to deploy (defaults to main)"
+        required: false
+        type: string
+        default: main
+
+concurrency:
+  # One deploy at a time; a newer one waits rather than racing the migration.
+  group: deploy-testnet
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # Proceed for a manual dispatch, or when CI succeeded for a push to main.
+    # (workflow_run also fires for CI runs on pull requests; those never deploy.)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    environment:
+      name: testnet
+      url: ${{ vars.EXPLORER_URL || 'https://explorer.lineage.to' }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      INDEXER_SERVICE: ${{ vars.RAILWAY_INDEXER_SERVICE || 'indexer' }}
+      WEB_SERVICE: ${{ vars.RAILWAY_WEB_SERVICE || 'web' }}
+      EXPLORER_URL: ${{ vars.EXPLORER_URL || 'https://explorer.lineage.to' }}
+      # The exact commit CI verified (or the requested ref for a manual run).
+      DEPLOY_REF: ${{ github.event.workflow_run.head_sha || inputs.ref || 'main' }}
+    steps:
+      - name: Check configuration
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::The RAILWAY_TOKEN secret is not set. See the Deployment section of the README."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_REF }}
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      - name: Install the Railway CLI
+        run: |
+          npm install --global @railway/cli
+          railway --version
+
+      - name: Describe the release
+        id: release
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          # The commit subject is untrusted text: pass it on through the
+          # environment, never by interpolating it into a script.
+          echo "RELEASE_MESSAGE=$sha $(git log -1 --format=%s | tr -d '\r\n' | cut -c1-80)" >> "$GITHUB_ENV"
+
+      # `--ci` streams the build logs and exits non-zero unless the deployment
+      # succeeds, so a failed build or a container that never becomes healthy
+      # stops the job here, before the web app is touched.
+      - name: Deploy the indexer (applies migrations)
+        run: railway up --ci --service "$INDEXER_SERVICE" -m "$RELEASE_MESSAGE"
+
+      - name: Deploy the web app
+        run: railway up --ci --service "$WEB_SERVICE" -m "$RELEASE_MESSAGE"
+
+      # The web app is only "deployed" if it serves requests that read the
+      # database through the current schema. Retries cover the switch-over.
+      - name: Smoke-test the live site
+        run: |
+          check() {
+            local path=$1
+            for attempt in $(seq 1 20); do
+              code=$(curl --silent --output /dev/null --max-time 20 --write-out '%{http_code}' "$EXPLORER_URL$path" || true)
+              if [ "$code" = "200" ]; then
+                echo "ok   $path"
+                return 0
+              fi
+              echo "wait $path -> $code (attempt $attempt/20)"
+              sleep 15
+            done
+            echo "::error::$EXPLORER_URL$path did not return 200"
+            return 1
+          }
+          check /api/health
+          check /api/v1/status
+          check "/api/v1/transactions?limit=1"
+          check "/api/v1/items?genesis=smoke-test"
+          check /
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ job.status }}"
+            echo ""
+            echo "- Commit: \`${{ steps.release.outputs.sha }}\`"
+            echo "- Site: $EXPLORER_URL"
+          } >> "$GITHUB_STEP_SUMMARY"

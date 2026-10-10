@@ -10,6 +10,7 @@ import {
 } from "@explorer/db";
 import { createWorker } from "../worker.js";
 import { loadConfig } from "../config.js";
+import { createAdvisoryLock } from "../advisory-lock.js";
 import { FakeSourceClient, buildBlock, buildTokenTx, buildSpendTx } from "./fake-source.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@127.0.0.1:5432/explorer_test";
@@ -115,6 +116,56 @@ describe("worker end-to-end", () => {
     releaseCycle();
     await stopped;
     expect(cycleFinished).toBe(true);
+  });
+
+  it("answers /health while it waits for a lock another instance holds", async () => {
+    const other = createDb(URL);
+    const held = createAdvisoryLock(other.sql);
+    expect(await held.tryAcquire()).toBe(true);
+    const source = new FakeSourceClient();
+    source.setSupply("1");
+    const config = loadConfig({
+      DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", HEALTH_PORT: "18097",
+      INDEXER_LOCK_ON_BUSY: "wait", INDEXER_POLL_INTERVAL_MS: "5",
+    });
+    const worker = createWorker({ config, db: handle.db, sql: handle.sql, source, logger: noopLogger });
+    const started = worker.start();
+    try {
+      await waitFor(() => worker.getStatus().lockHeld === false);
+      await sleep(20);
+      const res = await fetch("http://127.0.0.1:18097/health");
+      expect(res.status).toBe(200);
+      expect(worker.getStatus().lockHeld).toBe(false);
+
+      await held.release();
+      await started;
+      expect(worker.getStatus().lockHeld).toBe(true);
+    } finally {
+      await held.release().catch(() => {});
+      await worker.stop();
+      await other.close();
+    }
+  });
+
+  it("stop() ends the wait for a busy lock", async () => {
+    const other = createDb(URL);
+    const held = createAdvisoryLock(other.sql);
+    expect(await held.tryAcquire()).toBe(true);
+    const config = loadConfig({
+      DATABASE_URL: URL, LINEAGE_STORAGE_NODE_URL: "x", HEALTH_PORT: "",
+      INDEXER_LOCK_ON_BUSY: "wait", INDEXER_POLL_INTERVAL_MS: "5",
+    });
+    const worker = createWorker({ config, db: handle.db, sql: handle.sql, source: new FakeSourceClient(), logger: noopLogger });
+    const started = worker.start();
+    try {
+      await sleep(20);
+      await worker.stop();
+      await started;
+      expect(worker.getStatus().lockHeld).toBe(false);
+    } finally {
+      await held.release();
+      await other.close();
+    }
   });
 });
 

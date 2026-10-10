@@ -105,6 +105,48 @@ two-way swaps (`/api/v1/swaps`, `/api/v1/swaps/{druid}`), supply and status. The
 OpenAPI 3.1 document is at `/api/v1/openapi.json`. Access is anonymous with a
 soft per-IP rate limit.
 
+## Deployment
+
+Merging to `main` deploys the explorer to Railway. The `Deploy` workflow
+(`.github/workflows/deploy.yml`) runs after `CI` succeeds for a push to `main`
+and:
+
+1. deploys the **indexer**, which applies the database migrations on start;
+2. deploys the **web app** once the indexer is up;
+3. smoke-tests the live site and fails the run if it does not answer.
+
+The order is deliberate: the web app reads the columns the newest migration
+adds, so it must not go out before the indexer has migrated.
+
+The explorer runs in the Railway project `services`, environment `testnet`,
+as the services `indexer` and `web` (alongside `Postgres`). Each service builds
+its own Dockerfile from the repository root, selected by its
+`RAILWAY_DOCKERFILE_PATH` variable. Neither service is connected to this
+repository in Railway, so the workflow is the only thing that deploys them.
+
+One-off setup:
+
+| What | Where | Value |
+| --- | --- | --- |
+| `RAILWAY_TOKEN` | repo or `testnet` environment **secret** | a Railway *project token* for the `services` project, `testnet` environment |
+| `RAILWAY_INDEXER_SERVICE` | repo **variable** (optional) | indexer service name or id; defaults to `indexer` |
+| `RAILWAY_WEB_SERVICE` | repo **variable** (optional) | web service name or id; defaults to `web` |
+| `EXPLORER_URL` | repo **variable** (optional) | public URL to smoke-test; defaults to `https://explorer.lineage.to` |
+
+The indexer service has a healthcheck in Railway, set up as:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| healthcheck path | `/health` | the indexer answers only after its migrations have run, so healthy means migrated |
+| `PORT` | `8080` | tells Railway which port to probe; it is the indexer's default `HEALTH_PORT` |
+| `INDEXER_LOCK_ON_BUSY` | `wait` | Railway keeps the old indexer running until the new one is healthy, so the new one must wait for the indexer lock rather than exit |
+
+While it waits for the lock the new indexer already answers `/health`; it
+starts indexing when the old one stops and releases the lock.
+
+To redeploy by hand, run the `Deploy` workflow from the Actions tab and
+optionally give it a branch, tag or commit.
+
 ## Scripts
 
 | Script | Purpose |
