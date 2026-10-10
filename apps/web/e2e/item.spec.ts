@@ -13,7 +13,7 @@ test("header links to the items list", async ({ page }) => {
 test("items list shows the item and filters by metadata", async ({ page }) => {
   await page.goto("/items");
   await expect(page.locator(ITEM)).toHaveCount(1);
-  await expect(page.getByText("title: Seed Relic · medium: digital")).toBeVisible();
+  await expect(page.getByText("Seed Relic · medium: digital")).toBeVisible();
   // The search form works as a plain submit.
   await page.getByRole("searchbox", { name: "Search item metadata" }).fill("relic");
   await page.getByRole("button", { name: "Search" }).click();
@@ -50,7 +50,7 @@ test("address page lists items held, and omits the section when there are none",
   await page.goto("/address/addrC");
   const held = page.locator("section", { has: page.getByRole("heading", { name: "Items held" }) });
   await expect(held.locator(ITEM)).toBeVisible();
-  await expect(held).toContainText("title: Seed Relic");
+  await expect(held).toContainText("Seed Relic");
   await page.goto("/address/addrD"); // gave its item away in the swap
   await expect(page.getByRole("heading", { name: "Items held" })).toHaveCount(0);
 });

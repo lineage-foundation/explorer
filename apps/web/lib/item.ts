@@ -29,13 +29,18 @@ export function metadataRows(metadata: string | null): { key: string; value: str
   return rows.length > 0 ? rows : null;
 }
 
-/** A one-line summary of metadata for list rows, at most `max` characters. */
+/**
+ * A one-line summary of metadata for list rows, at most `max` characters. A
+ * `title` or `name` leads, unlabelled, so it is not cut off behind other fields.
+ */
 export function metadataPreview(metadata: string | null, max = 80): string {
   if (metadata === null || metadata.trim() === "") return "—";
   const rows = metadataRows(metadata);
-  const text = (rows ? rows.map((r) => `${r.key}: ${r.value}`).join(" · ") : metadata)
-    .replace(/\s+/g, " ")
-    .trim();
+  const lead = rows?.find((r) => /^(title|name)$/i.test(r.key) && r.value.trim() !== "");
+  const parts = rows
+    ? [...(lead ? [lead.value] : []), ...rows.filter((r) => r !== lead).map((r) => `${r.key}: ${r.value}`)]
+    : [metadata];
+  const text = parts.join(" · ").replace(/\s+/g, " ").trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
