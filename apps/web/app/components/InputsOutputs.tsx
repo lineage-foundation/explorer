@@ -3,6 +3,7 @@ import type { TxDetail } from "@explorer/db";
 import { Mono, Tag } from "@explorer/ui";
 import { formatLngx, truncateHash } from "../../lib/format.js";
 import { scriptStack } from "../../lib/detail.js";
+import { itemHref } from "../../lib/item.js";
 import { TOKEN_TICKER } from "@explorer/config";
 
 export function sumAmounts(values: (string | null)[]): string {
@@ -70,7 +71,7 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
                   {i.valueType === "item" && i.genesisHash && (
                     <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
                       genesis{" "}
-                      <Link href={`/transaction/${i.genesisHash}`} className="text-link hover:text-link-hover">
+                      <Link href={itemHref(i.genesisHash)} className="text-link hover:text-link-hover">
                         {truncateHash(i.genesisHash, 8, 6)}
                       </Link>
                     </div>
@@ -108,11 +109,12 @@ export function InputsOutputs({ tx, coinbase }: { tx: TxDetail; coinbase: boolea
                 index {o.n}
                 {o.valueType === "token" && o.scriptPublicKey && inputAddrs.has(o.scriptPublicKey) ? " · change" : ""}
               </div>
-              {o.valueType === "item" && o.genesisHash && (
+              {/* itemGenesis is set on creation outputs too, where genesisHash is null. */}
+              {o.valueType === "item" && o.itemGenesis && (
                 <div className="mt-0.5 font-mono text-[0.6rem] text-text-subtle">
                   genesis{" "}
-                  <Link href={`/transaction/${o.genesisHash}`} className="text-link hover:text-link-hover">
-                    {truncateHash(o.genesisHash, 8, 6)}
+                  <Link href={itemHref(o.itemGenesis)} className="text-link hover:text-link-hover">
+                    {truncateHash(o.itemGenesis, 8, 6)}
                   </Link>
                 </div>
               )}

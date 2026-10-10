@@ -36,3 +36,27 @@ it("backfills druid from druidInfo", async () => {
     await sql.end({ timeout: 5 });
   }
 });
+
+it("backfills itemGenesis for item outputs only", async () => {
+  const sql = postgres(URL, { max: 1 });
+  const cleanup = async () => {
+    await sql`delete from "tx_out" where "txHash" = 'mig_item_tx'`;
+    await sql`delete from "transaction" where hash = 'mig_item_tx'`;
+    await sql`delete from "block" where hash = 'mig_item_block'`;
+  };
+  try {
+    await cleanup();
+    await sql`insert into "block" (version, num, hash) values (1, 990002, 'mig_item_block')`;
+    const [tx] = await sql<{ id: number }[]>`insert into "transaction" (hash, "blockHash", version) values ('mig_item_tx', 'mig_item_block', 1) returning id`;
+    await sql`insert into "tx_out" ("txId", "txHash", "valueType", amount, locktime, "genesisHash", n) values
+      (${tx!.id}, 'mig_item_tx', 'item', '1', '0', null, 0),
+      (${tx!.id}, 'mig_item_tx', 'item', '1', '0', 'g_x', 1),
+      (${tx!.id}, 'mig_item_tx', 'token', '5', '0', null, 2)`;
+    await applyMigrations(URL, DIR);
+    const rows = await sql<{ n: number; itemGenesis: string | null }[]>`select n, "itemGenesis" from "tx_out" where "txHash" = 'mig_item_tx' order by n`;
+    expect(rows.map((r) => r.itemGenesis)).toEqual(["mig_item_tx", "g_x", null]);
+  } finally {
+    await cleanup();
+    await sql.end({ timeout: 5 });
+  }
+});

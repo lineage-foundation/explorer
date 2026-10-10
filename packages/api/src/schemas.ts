@@ -23,6 +23,10 @@ export const ListQuery = PageQuery.extend({
 export const ItemQuery = PageQuery.extend({
   q: z.string().min(1).max(128).optional().openapi({ param: { name: "q", in: "query" }, example: "sword" }),
   genesis: z.string().min(1).max(128).optional().openapi({ param: { name: "genesis", in: "query" }, example: "g7f3c2a8" }),
+  spent: z.enum(["true", "false"]).optional().openapi({
+    param: { name: "spent", in: "query" }, example: "false",
+    description: "Only spent (`true`) or only unspent (`false`) outputs. Unspent outputs are the current holders.",
+  }),
 });
 
 export const ProblemSchema = z
@@ -139,8 +143,12 @@ export const AddressSchema = z
 
 export const ItemOutputSchema = z
   .object({
-    genesisHash: z.string().nullable(),
-    metadata: z.string().nullable(),
+    genesisHash: z.string().nullable().openapi({
+      description: "The item this output belongs to: the hash of its create transaction, including on the creation output itself.",
+    }),
+    metadata: z.string().nullable().openapi({
+      description: "The output's own metadata or, failing that, the item's metadata from its creation output.",
+    }),
     address: z.string().nullable(),
     amount: z.string().nullable(),
     amountLngx: z.string().nullable().openapi({ description: "Always null: an item quantity is not a token amount." }),
@@ -152,6 +160,45 @@ export const ItemOutputSchema = z
     timestamp: z.string().datetime().nullable(),
   })
   .openapi("ItemOutput");
+
+const ItemHolderSchema = z.object({ address: z.string(), amount: z.string() });
+
+export const ItemSchema = z
+  .object({
+    genesisHash: z.string(),
+    metadata: z.string().nullable(),
+    totalAmount: z.string().openapi({ description: "Units created, as a decimal string." }),
+    creator: z.string().nullable(),
+    blockNum: z.number().int(),
+    blockHash: z.string(),
+    timestamp: z.string().datetime().nullable(),
+    holderCount: z.number().int(),
+    holders: z.array(ItemHolderSchema).openapi({ description: "Current holders, largest first (at most 100)." }),
+  })
+  .openapi("Item");
+
+export const ItemTransferSchema = z
+  .object({
+    txHash: z.string(),
+    blockNum: z.number().int(),
+    blockHash: z.string(),
+    timestamp: z.string().datetime().nullable(),
+    from: z.array(z.string()).openapi({
+      description: "Input addresses that spent this item in the transaction. Empty for the create transaction.",
+    }),
+    to: z.array(z.object({ address: z.string().nullable(), amount: z.string() })),
+    druid: z.string().nullable().openapi({ description: "Set when the transaction is one half of a two-way swap." }),
+    created: z.boolean().openapi({ description: "True for the transaction that created the item." }),
+  })
+  .openapi("ItemTransfer");
+
+export const AddressItemSchema = z
+  .object({
+    genesisHash: z.string(),
+    amount: z.string(),
+    metadata: z.string().nullable(),
+  })
+  .openapi("AddressItem");
 
 export const SupplySchema = z
   .object({

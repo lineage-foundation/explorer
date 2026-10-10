@@ -24,7 +24,9 @@ export interface LineageAssetItem {
   Item: {
     // Decimal string for the same >2^53 precision reason as LineageAssetToken.
     amount: string;
-    genesis_hash: string;
+    // Null on the output that creates the item: the item's genesis hash is
+    // then the hash of that transaction itself.
+    genesis_hash: string | null;
     metadata: string | null;
   };
 }

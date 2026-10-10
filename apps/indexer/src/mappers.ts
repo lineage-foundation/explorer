@@ -38,6 +38,8 @@ export interface OutputInsert {
   genesisHash: string | null;
   scriptPublicKey: string | null;
   itemMetadata: string | null;
+  // The item an item output belongs to (see schema.txOut.itemGenesis).
+  itemGenesis: string | null;
   n: number;
   isToken: boolean;
 }
@@ -62,6 +64,7 @@ export function mapOutputRow(
       amount: output.value.Token, // already a precision-safe decimal string
       genesisHash: null,
       itemMetadata: null,
+      itemGenesis: null,
       isToken: true,
     };
   }
@@ -72,6 +75,8 @@ export function mapOutputRow(
     amount: item.amount, // already a precision-safe decimal string
     genesisHash: item.genesis_hash,
     itemMetadata: item.metadata,
+    // A creation output has no genesis hash on chain; the item is this transaction.
+    itemGenesis: item.genesis_hash ?? txHash,
     isToken: false,
   };
 }

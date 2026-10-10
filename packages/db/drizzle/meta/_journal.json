@@ -50,6 +50,13 @@
       "when": 1791611669895,
       "tag": "0006_acoustic_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791618788295,
+      "tag": "0007_parched_bucky",
+      "breakpoints": true
     }
   ]
 }

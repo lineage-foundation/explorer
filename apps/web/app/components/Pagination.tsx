@@ -1,14 +1,27 @@
 import Link from "next/link";
 
+// `param` names the query parameter that carries the page (so one page can hold
+// two independently paged lists); `query` holds other values to keep in the
+// link, such as a search term or the other list's page.
 export function Pagination(
-  { page, hasMore, basePath }: { page: number; hasMore: boolean; basePath: string },
+  { page, hasMore, basePath, param = "page", query = {} }: {
+    page: number; hasMore: boolean; basePath: string; param?: string; query?: Record<string, string | undefined>;
+  },
 ) {
+  const href = (target: number): string => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (key !== param && value !== undefined && value !== "") params.set(key, value);
+    }
+    params.set(param, String(target));
+    return `${basePath}?${params.toString()}`;
+  };
   return (
     <div className="mt-4 flex items-center justify-between text-sm">
       {page > 1
         ? (
           <Link
-            href={`${basePath}?page=${page - 1}`}
+            href={href(page - 1)}
             className="rounded-md border border-border px-3 py-1.5 text-text-muted hover:text-text"
           >
             ← Prev
@@ -27,7 +40,7 @@ export function Pagination(
       {hasMore
         ? (
           <Link
-            href={`${basePath}?page=${page + 1}`}
+            href={href(page + 1)}
             className="rounded-md border border-border px-3 py-1.5 text-text-muted hover:text-text"
           >
             Next →
@@ -47,8 +60,12 @@ export function Pagination(
 // deep-offset cap.
 const MAX_PAGE = 4000;
 
-export function parsePage(searchParams: { page?: string | string[] }): number {
-  const raw = Array.isArray(searchParams.page) ? searchParams.page[0] : searchParams.page;
+export function parsePage(
+  searchParams: Record<string, string | string[] | undefined>,
+  param = "page",
+): number {
+  const value = searchParams[param];
+  const raw = Array.isArray(value) ? value[0] : value;
   const n = Number.parseInt(raw ?? "1", 10);
   if (!Number.isFinite(n) || n < 1) return 1;
   return Math.min(n, MAX_PAGE);

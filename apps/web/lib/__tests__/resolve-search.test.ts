@@ -4,15 +4,38 @@ vi.mock("@explorer/db", () => ({
   getBlockHashByNum: vi.fn(),
   searchByPrefix: vi.fn(),
   getSwapByDruid: vi.fn(),
+  getItem: vi.fn(),
 }));
 
-import { getBlockHashByNum, searchByPrefix, getSwapByDruid } from "@explorer/db";
+import { getBlockHashByNum, searchByPrefix, getSwapByDruid, getItem } from "@explorer/db";
 import { resolveSearch } from "../resolve-search.js";
 
 const db = {} as never;
 beforeEach(() => vi.clearAllMocks());
 
 describe("resolveSearch", () => {
+  const TX = `g${"a".repeat(31)}`;
+
+  it("offers the item as well when a full transaction hash is a create transaction", async () => {
+    vi.mocked(searchByPrefix).mockResolvedValue({ blocks: [], transactions: [{ hash: TX }], addresses: [] });
+    vi.mocked(getItem).mockResolvedValue({ genesisHash: TX } as never);
+    const res = await resolveSearch(db, TX);
+    expect(res.map((s) => [s.kind, s.href])).toEqual([["tx", `/transaction/${TX}`], ["item", `/item/${TX}`]]);
+    expect(res[1]).toMatchObject({ label: "Item gaaaaa…aaaa", found: true });
+  });
+
+  it("offers no item for a transaction hash that is not a create transaction", async () => {
+    vi.mocked(searchByPrefix).mockResolvedValue({ blocks: [], transactions: [{ hash: TX }], addresses: [] });
+    vi.mocked(getItem).mockResolvedValue(null);
+    expect((await resolveSearch(db, TX)).map((s) => s.kind)).toEqual(["tx"]);
+  });
+
+  it("does not look for an item until the hash is complete", async () => {
+    vi.mocked(searchByPrefix).mockResolvedValue({ blocks: [], transactions: [], addresses: [] });
+    await resolveSearch(db, "gaaaa");
+    expect(getItem).not.toHaveBeenCalled();
+  });
+
   const DRUID = "DRUID0x277251e1651aa2861727323acf69a358";
 
   it("resolves an exact DRUID to its swap without a prefix search", async () => {

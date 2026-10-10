@@ -25,6 +25,9 @@ export function SiteHeader() {
           <Link href="/transactions" className="hover:text-text">
             Transactions
           </Link>
+          <Link href="/items" className="hover:text-text">
+            Items
+          </Link>
         </nav>
         <div className="ml-auto w-full max-w-sm">
           <SearchBar />
