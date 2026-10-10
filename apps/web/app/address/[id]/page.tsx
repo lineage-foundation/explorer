@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { getAccountBalance, getAccountTransactions } from "@explorer/db";
+import { getAccountBalance, getAccountActivity } from "@explorer/db";
 import {
-  Stat, Table, THead, TBody, TR, TH, TD, Mono, CopyButton, EmptyState,
+  Stat, Table, THead, TBody, TR, TH, TD, Mono, Pill, CopyButton, EmptyState,
 } from "@explorer/ui";
 import { TOKEN_TICKER } from "@explorer/config";
 import { getDb } from "../../../lib/db.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination, parsePage } from "../../components/Pagination.js";
 import { formatLngx, relativeTime, truncateHash } from "../../../lib/format.js";
-import { netForAddress } from "../../../lib/tx.js";
+import { netForAddress, swapLinesForAddress } from "../../../lib/tx.js";
+import { swapHref } from "../../../lib/swap.js";
 import { groupDigits } from "../../../lib/detail.js";
 
 export const revalidate = 20;
@@ -20,9 +21,9 @@ export default async function AddressPage({
   const { id } = await params;
   const page = parsePage(await searchParams);
   const { db } = getDb();
-  const [{ balance }, { transactions, pagination }] = await Promise.all([
+  const [{ balance }, { items, pagination }] = await Promise.all([
     getAccountBalance(db, id),
-    getAccountTransactions(db, id, { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
+    getAccountActivity(db, id, { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
   ]);
 
   return (
@@ -41,14 +42,48 @@ export default async function AddressPage({
       </div>
       <section>
         <h2 className="mb-2 font-display text-lg text-text">Transactions</h2>
-        {transactions.length === 0
+        {items.length === 0
           ? <EmptyState title="No transactions for this address" />
           : (
             <>
               <Table>
                 <THead><TR><TH>Transaction</TH><TH>Block</TH><TH>Amount</TH><TH>Balance</TH><TH>Age</TH></TR></THead>
                 <TBody>
-                  {transactions.map((t) => {
+                  {items.map((entry) => {
+                    const t = entry.txs[0];
+                    if (!t) return null;
+                    if (entry.kind === "swap" && entry.swap) {
+                      // A two-way swap is one entry: what this address gave and received.
+                      const lines = swapLinesForAddress(entry.swap, id);
+                      return (
+                        <TR key={entry.swap.druid}>
+                          <TD>
+                            <Link href={swapHref(entry.swap.druid)} className="text-link hover:text-link-hover">
+                              <Mono>{truncateHash(entry.swap.druid, 10, 4)}</Mono>
+                            </Link>{" "}
+                            <Pill tone="swap">swap</Pill>
+                          </TD>
+                          <TD>
+                            <Link href={`/block/${t.blockHash}`} className="text-link hover:text-link-hover">
+                              <Mono>{truncateHash(t.blockHash, 6, 4)}</Mono>
+                            </Link>
+                          </TD>
+                          <TD>
+                            {lines.length === 0
+                              ? <Mono className="text-text-subtle">—</Mono>
+                              : lines.map((line, i) => (
+                                <div key={i}>
+                                  <Mono className={line.sign === "+" ? "text-accent" : "text-text-muted"}>
+                                    {`${line.sign}${line.text}`}
+                                  </Mono>
+                                </div>
+                              ))}
+                          </TD>
+                          <TD><Mono className="text-text-muted">{formatLngx(entry.balanceAfter, 2)}</Mono></TD>
+                          <TD><span className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
+                        </TR>
+                      );
+                    }
                     // Net for THIS address: what it received minus what it spent.
                     const net = netForAddress(t, id);
                     const abs = (net < 0n ? -net : net).toString();
