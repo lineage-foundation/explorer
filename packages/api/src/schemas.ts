@@ -51,7 +51,7 @@ export const PaginationSchema = z
 const TxType = z.enum(["token", "item", "coinbase", "unknown"]);
 
 const DruidField = z.string().nullable().openapi({
-  description: "DRUID shared by the halves of a two-way swap; null for an ordinary transaction.",
+  description: "DRUID shared by the halves of a two-way trade; null for an ordinary transaction.",
 });
 
 export const BlockSummarySchema = z
@@ -187,7 +187,7 @@ export const ItemTransferSchema = z
       description: "Input addresses that spent this item in the transaction. Empty for the create transaction.",
     }),
     to: z.array(z.object({ address: z.string().nullable(), amount: z.string() })),
-    druid: z.string().nullable().openapi({ description: "Set when the transaction is one half of a two-way swap." }),
+    druid: z.string().nullable().openapi({ description: "Set when the transaction is one half of a two-way trade." }),
     created: z.boolean().openapi({ description: "True for the transaction that created the item." }),
   })
   .openapi("ItemTransfer");
@@ -220,7 +220,7 @@ export const StatusSchema = z
   })
   .openapi("Status");
 
-const SwapAssetSchema = z.object({
+const TradeAssetSchema = z.object({
   kind: z.enum(["token", "item"]),
   amount: z.string(),
   amountLngx: z.string().nullable().openapi({ description: "LNGX-formatted amount; null for items." }),
@@ -228,17 +228,17 @@ const SwapAssetSchema = z.object({
   metadata: z.string().nullable(),
 });
 
-const SwapLegSchema = z.object({
+const TradeLegSchema = z.object({
   from: z.array(z.string()).nullable().openapi({
     description: "Input addresses of the transaction that pays this leg; null when no indexed transaction does.",
   }),
   to: z.string(),
   txHash: z.string().nullable(),
   met: z.boolean(),
-  asset: SwapAssetSchema,
+  asset: TradeAssetSchema,
 });
 
-export const SwapSchema = z
+export const TradeSchema = z
   .object({
     druid: z.string(),
     participants: z.number().int(),
@@ -248,10 +248,10 @@ export const SwapSchema = z
     blockNum: z.number().int(),
     blockHash: z.string(),
     timestamp: z.string().datetime().nullable(),
-    legs: z.array(SwapLegSchema),
+    legs: z.array(TradeLegSchema),
     transactions: z.array(z.string()),
   })
-  .openapi("Swap");
+  .openapi("Trade");
 
 export function listSchema<T extends z.ZodTypeAny>(item: T, name: string) {
   return z.object({ data: z.array(item), pagination: PaginationSchema }).openapi(name);

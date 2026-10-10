@@ -71,8 +71,8 @@ test("searching a DRUID goes to its trade", async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/trade/${SWAP_DRUID}$`));
 });
 
-test("swap API returns the trade", async ({ request }) => {
-  const res = await request.get(`/api/v1/swaps/${SWAP_DRUID}`);
+test("trade API returns the trade", async ({ request }) => {
+  const res = await request.get(`/api/v1/trades/${SWAP_DRUID}`);
   expect(res.status()).toBe(200);
   const body = await res.json();
   expect(body).toMatchObject({ druid: SWAP_DRUID, complete: true, transactions: ["sA", "sB"] });
@@ -91,10 +91,20 @@ test("a trade with a non-canonical DRUID is reachable from the list, by page and
   const direct = await page.goto(path);
   expect(direct?.status()).toBe(200);
   // And through the public API.
-  const res = await request.get(`/api/v1/swaps/${encodeURIComponent(ODD_DRUID)}`);
+  const res = await request.get(`/api/v1/trades/${encodeURIComponent(ODD_DRUID)}`);
   expect(res.status()).toBe(200);
   expect(await res.json()).toMatchObject({ druid: ODD_DRUID, complete: true });
   // Each half's banner links back to the same encoded path.
   await page.goto("/transaction/oA");
   await expect(page.locator(`a[href="${path}"]`)).toBeVisible();
+});
+
+test("the old swap URLs redirect to their trade equivalents", async ({ request }) => {
+  const api = await request.get(`/api/v1/swaps/${SWAP_DRUID}`, { maxRedirects: 0 });
+  expect(api.status()).toBe(308);
+  expect(api.headers()["location"]).toBe(`/api/v1/trades/${SWAP_DRUID}`);
+  const list = await request.get("/api/v1/swaps?limit=1");
+  expect(list.ok()).toBe(true);
+  const page = await request.get(`/swap/${SWAP_DRUID}`, { maxRedirects: 0 });
+  expect(page.headers()["location"]).toBe(`/trade/${SWAP_DRUID}`);
 });
