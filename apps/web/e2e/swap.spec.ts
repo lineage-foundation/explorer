@@ -1,9 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { seed, SWAP_DRUID, ODD_DRUID } from "./seed.js";
-
-test.beforeAll(async () => {
-  await seed();
-});
+import { SWAP_DRUID, ODD_DRUID } from "./seed.js";
 
 test("home feed shows the swap as one row", async ({ page }) => {
   await page.goto("/");

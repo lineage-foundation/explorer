@@ -1,10 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { seed } from "./seed.js";
-
-test.beforeAll(async () => {
-  await seed();
-});
-
 test("home shows stats and latest feed", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Total blocks")).toBeVisible();
