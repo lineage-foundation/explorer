@@ -7,8 +7,8 @@ function tx(
   outs: { scriptPublicKey: string | null; amount: string | null; valueType?: string }[],
 ): TxDetail {
   return {
-    blockHash: "b", hash: "h", version: 1, timestamp: null, coinbase: false, fees: null, druidInfo: null,
-    ins: ins.map((i) => ({ scriptSignature: {}, previousOutTxHash: null, previousOutTxN: null, fromAddress: i.fromAddress, amount: i.amount })),
+    blockHash: "b", hash: "h", version: 1, timestamp: null, coinbase: false, fees: null, druidInfo: null, druid: null,
+    ins: ins.map((i) => ({ scriptSignature: {}, previousOutTxHash: null, previousOutTxN: null, fromAddress: i.fromAddress, amount: i.amount, valueType: "token", genesisHash: null })),
     outs: outs.map((o, n) => ({ valueType: o.valueType ?? "token", amount: o.amount, locktime: "0", genesisHash: null, scriptPublicKey: o.scriptPublicKey, itemMetadata: null, n })),
   };
 }

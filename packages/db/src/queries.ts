@@ -24,7 +24,7 @@ export interface BlockListItem {
 }
 export interface BlockTxItem {
   hash: string; blockHash: string; version: number; timestamp: Date | null;
-  txType: string | undefined; coinbase: boolean;
+  txType: string | undefined; coinbase: boolean; druid: string | null;
 }
 export interface TxListItem {
   hash: string; blockHash: string; blockNum: number; version: number;
@@ -34,12 +34,18 @@ export interface TxDetail {
   blockHash: string; hash: string; version: number; timestamp: Date | null;
   coinbase: boolean;
   fees: unknown; druidInfo: unknown;
+  // The DRUID shared with the other halves of a two-way swap; null otherwise.
+  druid: string | null;
   ins: {
     scriptSignature: unknown;
     previousOutTxHash: string | null;
     previousOutTxN: number | null;
     fromAddress: string | null;
     amount: string | null;
+    // Asset kind of the spent output ("token" | "item"), so an item quantity is
+    // never mistaken for a token amount. Null when the input did not resolve.
+    valueType: string | null;
+    genesisHash: string | null;
   }[];
   outs: {
     valueType: string; amount: string | null; locktime: string;
@@ -159,7 +165,7 @@ export async function getBlockTransactionsForBlock(
   const txs = await db
     .select({
       hash: transaction.hash, blockHash: transaction.blockHash,
-      version: transaction.version, coinbase: transaction.coinbase,
+      version: transaction.version, coinbase: transaction.coinbase, druid: transaction.druid,
     })
     .from(transaction)
     .where(eq(transaction.blockHash, found.hash))
@@ -175,7 +181,7 @@ export async function getBlockTransactionsForBlock(
   return {
     transactions: txs.map((t) => ({
       hash: t.hash, blockHash: t.blockHash, version: t.version,
-      timestamp: found.timestamp, txType: typeByHash.get(t.hash), coinbase: t.coinbase,
+      timestamp: found.timestamp, txType: typeByHash.get(t.hash), coinbase: t.coinbase, druid: t.druid,
     })),
   };
 }
@@ -249,7 +255,8 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
       .select({
         hash: transaction.hash, blockHash: transaction.blockHash, version: transaction.version,
         coinbase: transaction.coinbase,
-        fees: transaction.fees, druidInfo: transaction.druidInfo, timestamp: block.timestamp,
+        fees: transaction.fees, druidInfo: transaction.druidInfo, druid: transaction.druid,
+        timestamp: block.timestamp,
       })
       .from(transaction)
       .innerJoin(block, eq(block.hash, transaction.blockHash))
@@ -263,6 +270,8 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
         previousOutTxN: txInExpanded.previousOutTxN,
         fromAddress: txInExpanded.outScriptPublicKey,
         amount: txOut.amount,
+        valueType: txOut.valueType,
+        genesisHash: txOut.genesisHash,
       })
       .from(txInExpanded)
       .leftJoin(
@@ -282,7 +291,7 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
   const detailByHash = new Map<string, TxDetail>(
     txs.map((t) => [t.hash, {
       blockHash: t.blockHash, hash: t.hash, version: t.version, coinbase: t.coinbase, timestamp: t.timestamp,
-      fees: t.fees, druidInfo: t.druidInfo,
+      fees: t.fees, druidInfo: t.druidInfo, druid: t.druid,
       ins: (insByHash.get(t.hash) ?? []).map((i: TxIn) => {
         const resolved = expandedByKey.get(`${t.hash}:${i.previousOutTxHash}:${i.previousOutTxN}`);
         return {
@@ -290,6 +299,8 @@ async function loadTxDetails(db: Database, hashes: string[]): Promise<TxDetail[]
           previousOutTxHash: i.previousOutTxHash, previousOutTxN: i.previousOutTxN,
           fromAddress: resolved?.fromAddress ?? null,
           amount: resolved?.amount ?? null,
+          valueType: resolved?.valueType ?? null,
+          genesisHash: resolved?.genesisHash ?? null,
         };
       }),
       outs: (outsByHash.get(t.hash) ?? []).map((o: TxOut) => ({
