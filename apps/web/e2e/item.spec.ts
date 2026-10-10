@@ -13,7 +13,7 @@ test("header links to the items list", async ({ page }) => {
 test("items list shows the item and filters by metadata", async ({ page }) => {
   await page.goto("/items");
   await expect(page.locator(ITEM)).toHaveCount(1);
-  await expect(page.getByText("title: Seed Relic · medium: digital")).toBeVisible();
+  await expect(page.getByText("Seed Relic · medium: digital")).toBeVisible();
   // The search form works as a plain submit.
   await page.getByRole("searchbox", { name: "Search item metadata" }).fill("relic");
   await page.getByRole("button", { name: "Search" }).click();
@@ -37,7 +37,7 @@ test("item page shows metadata, the current holder and the history", async ({ pa
   const history = page.locator("section", { has: page.getByRole("heading", { name: "History" }) });
   await expect(history.locator("tbody tr")).toHaveCount(2); // the swap transfer, then the creation
   await expect(history.locator("tbody tr").first().locator('a[href="/transaction/sA"]')).toBeVisible();
-  await expect(history.locator(`a[href="/swap/${SWAP_DRUID}"]`)).toBeVisible();
+  await expect(history.locator(`a[href="/trade/${SWAP_DRUID}"]`)).toBeVisible();
   await expect(history.locator("tbody tr").last().getByText("created")).toBeVisible();
 });
 
@@ -50,7 +50,7 @@ test("address page lists items held, and omits the section when there are none",
   await page.goto("/address/addrC");
   const held = page.locator("section", { has: page.getByRole("heading", { name: "Items held" }) });
   await expect(held.locator(ITEM)).toBeVisible();
-  await expect(held).toContainText("title: Seed Relic");
+  await expect(held).toContainText("Seed Relic");
   await page.goto("/address/addrD"); // gave its item away in the swap
   await expect(page.getByRole("heading", { name: "Items held" })).toHaveCount(0);
 });
@@ -61,7 +61,7 @@ test("the create transaction, the transfer and the swap all link to the item", a
   await expect(page.locator(ITEM).first()).toBeVisible();
   await page.goto("/transaction/sA");
   await expect(page.locator(ITEM).first()).toBeVisible();
-  await page.goto(`/swap/${SWAP_DRUID}`);
+  await page.goto(`/trade/${SWAP_DRUID}`);
   await expect(page.locator(ITEM).first()).toBeVisible();
 });
 

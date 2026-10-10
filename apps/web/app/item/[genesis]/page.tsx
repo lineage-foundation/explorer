@@ -143,7 +143,7 @@ export default async function ItemPage({
                           {t.druid !== null && (
                             <>
                               {" "}
-                              <Link href={swapHref(t.druid)}><Pill tone="swap">swap</Pill></Link>
+                              <Link href={swapHref(t.druid)}><Pill tone="swap">trade</Pill></Link>
                             </>
                           )}
                         </TD>

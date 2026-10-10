@@ -130,7 +130,7 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
                           </Link>
                           {swap && <Mono className="ml-3 text-xs text-text-muted">{summarise(swap)}</Mono>}
                         </TD>
-                        <TD><Pill tone="swap">swap</Pill></TD>
+                        <TD><Pill tone="swap">trade</Pill></TD>
                       </TR>
                     );
                   }

@@ -50,7 +50,7 @@ export default async function TransactionPage({ params }: { params: Promise<{ id
         <div className="-mt-4 flex flex-wrap items-center gap-2 break-all font-mono text-sm text-text">
           <CopyButton value={tx.hash} />{" "}
           {tx.druid !== null
-            ? <Pill tone="swap">swap</Pill>
+            ? <Pill tone="swap">trade</Pill>
             : <Pill tone={label === "unknown" ? "neutral" : label}>{label}</Pill>}
         </div>
       </div>

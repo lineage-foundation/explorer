@@ -24,7 +24,12 @@ describe("metadataPreview", () => {
     expect(metadataPreview("  \n ")).toBe("—");
   });
   it("summarises a JSON object as key: value pairs", () => {
-    expect(metadataPreview('{"title":"Alpha","medium":"digital"}')).toBe("title: Alpha · medium: digital");
+    expect(metadataPreview('{"edition":"Alpha","medium":"digital"}')).toBe("edition: Alpha · medium: digital");
+  });
+  it("leads with the title or name, wherever it sits in the object", () => {
+    expect(metadataPreview('{"collection":"Moiré","hash":"951a","title":"Phase 0"}')).toBe("Phase 0 · collection: Moiré · hash: 951a");
+    expect(metadataPreview('{"medium":"digital","Name":"Beta"}')).toBe("Beta · medium: digital");
+    expect(metadataPreview('{"title":"  ","medium":"digital"}')).toBe("title: · medium: digital");
   });
   it("collapses whitespace in raw text", () => {
     expect(metadataPreview("line one\n  line two")).toBe("line one line two");

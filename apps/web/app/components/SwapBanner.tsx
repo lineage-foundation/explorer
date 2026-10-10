@@ -8,10 +8,10 @@ import { swapHref } from "../../lib/swap.js";
 export function SwapBanner({ druid, counterparts }: { druid: string; counterparts: string[] }) {
   return (
     <Card className="p-4">
-      <div className="font-display text-sm text-text">Half of a two-way swap</div>
+      <div className="font-display text-sm text-text">Half of a two-way trade</div>
       <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 font-mono text-xs text-text-muted">
         <span>
-          Swap{" "}
+          Trade{" "}
           <Link href={swapHref(druid)} className="text-link hover:text-link-hover">
             <Mono>{truncateHash(druid, 12, 6)}</Mono>
           </Link>

@@ -11,6 +11,6 @@ export function classify(query: string): { kind: SearchKind; href: string | null
   if (/^b[a-fA-F0-9]{64}$/.test(q)) return { kind: "block-hash", href: `/block/${q}` };
   if (/^g[a-fA-F0-9]{31}$/.test(q)) return { kind: "tx", href: `/transaction/${q}` };
   if (/^[a-fA-F0-9]{64}$/.test(q)) return { kind: "address", href: `/address/${q}` };
-  if (DRUID_RE.test(q)) return { kind: "swap", href: `/swap/${q}` };
+  if (DRUID_RE.test(q)) return { kind: "swap", href: `/trade/${q}` };
   return { kind: "unknown", href: null };
 }
