@@ -46,11 +46,15 @@ export interface TxDetail {
     // Asset kind of the spent output ("token" | "item"), so an item quantity is
     // never mistaken for a token amount. Null when the input did not resolve.
     valueType: string | null;
+    // The item a spent item output belongs to (resolved for creation outputs too).
     genesisHash: string | null;
   }[];
   outs: {
     valueType: string; amount: string | null; locktime: string;
     genesisHash: string | null; scriptPublicKey: string | null; itemMetadata: string | null; n: number;
+    // The item an item output belongs to (its create transaction's hash), also
+    // set on the creation output itself, where genesisHash is null.
+    itemGenesis: string | null;
   }[];
 }
 
@@ -285,7 +289,7 @@ export async function loadTxDetails(db: Database, hashes: string[]): Promise<TxD
         fromAddress: txInExpanded.outScriptPublicKey,
         amount: txOut.amount,
         valueType: txOut.valueType,
-        genesisHash: txOut.genesisHash,
+        genesisHash: txOut.itemGenesis,
       })
       .from(txInExpanded)
       .leftJoin(
@@ -320,7 +324,7 @@ export async function loadTxDetails(db: Database, hashes: string[]): Promise<TxD
       outs: (outsByHash.get(t.hash) ?? []).map((o: TxOut) => ({
         valueType: o.valueType, amount: o.amount, locktime: o.locktime,
         genesisHash: o.genesisHash, scriptPublicKey: o.scriptPublicKey,
-        itemMetadata: o.itemMetadata, n: o.n,
+        itemMetadata: o.itemMetadata, n: o.n, itemGenesis: o.itemGenesis,
       })),
     }]),
   );

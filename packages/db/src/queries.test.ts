@@ -39,7 +39,9 @@ beforeAll(async () => {
     { txId: 1, txHash: "tx_1", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr_1", n: 0 },
     { txId: 2, txHash: "tx_cb", valueType: "token", amount: "1000", locktime: "0", scriptPublicKey: "miner", n: 0 },
     // An item output spent by tx_2, so an input can resolve to an item.
-    { txId: 1, txHash: "tx_1", valueType: "item", amount: "1", locktime: "0", genesisHash: "gen_x", scriptPublicKey: "addr_1", n: 1 },
+    { txId: 1, txHash: "tx_1", valueType: "item", amount: "1", locktime: "0", genesisHash: "gen_x", itemGenesis: "gen_x", scriptPublicKey: "addr_1", n: 1 },
+    // A creation output (no genesis hash on chain): the item is tx_1 itself.
+    { txId: 1, txHash: "tx_1", valueType: "item", amount: "1", locktime: "0", genesisHash: null, itemGenesis: "tx_1", itemMetadata: '{"k":"v"}', scriptPublicKey: "addr_1", n: 2 },
   ]);
   await db().insert(txIn).values([
     { txId: 1, txHash: "tx_1", scriptSignature: {} },
@@ -48,6 +50,7 @@ beforeAll(async () => {
       previousOutTxHash: "tx_1", previousOutTxN: 0,
     },
     { txId: 3, txHash: "tx_2", scriptSignature: {}, previousOutTxHash: "tx_1", previousOutTxN: 1 },
+    { txId: 3, txHash: "tx_2", scriptSignature: {}, previousOutTxHash: "tx_1", previousOutTxN: 2 },
   ]);
   await db().insert(txInExpanded).values([
     {
@@ -58,6 +61,10 @@ beforeAll(async () => {
       txId: 3, txHash: "tx_2", scriptSignature: {},
       previousOutTxHash: "tx_1", previousOutTxN: 1, outScriptPublicKey: "addr_1",
     },
+    {
+      txId: 3, txHash: "tx_2", scriptSignature: {},
+      previousOutTxHash: "tx_1", previousOutTxN: 2, outScriptPublicKey: "addr_1",
+    },
   ]);
   await db().insert(circulatingSupply).values([{ id: 1, circulatingSupply: "12345" }]);
 });
@@ -65,6 +72,13 @@ beforeAll(async () => {
 afterAll(async () => { await handle.close(); });
 
 describe("read queries", () => {
+  it("resolves the item an input spends and an output belongs to, including creation outputs", async () => {
+    const tx2 = await getTransactionByHash(db(), "tx_2");
+    expect(tx2?.ins.map((i) => i.genesisHash).sort()).toEqual(["gen_x", "tx_1", null].sort());
+    const tx1 = await getTransactionByHash(db(), "tx_1");
+    expect(tx1?.outs.map((o) => [o.n, o.itemGenesis]).sort()).toEqual([[0, null], [1, "gen_x"], [2, "tx_1"]]);
+  });
+
   it("exposes the druid and each input's asset kind on a transaction", async () => {
     const tx = await getTransactionByHash(db(), "tx_2");
     expect(tx?.druid).toBe("DRUID0xq");
@@ -180,7 +194,7 @@ describe("read queries", () => {
 
   it("resolves a spend transaction's input address and amount via tx_in_expanded", async () => {
     const tx = await getTransactionByHash(db(), "tx_2");
-    expect(tx?.ins).toHaveLength(2);
+    expect(tx?.ins).toHaveLength(3);
     const spend = tx?.ins.find((i) => i.previousOutTxN === 0);
     expect(spend?.fromAddress).toBe("addr_1");
     expect(spend?.amount).toBe("500");

@@ -38,6 +38,7 @@ function detail(
     outs: outs.map((o, n) => ({
       valueType: o.kind ?? "token", amount: o.amount, locktime: "0", genesisHash: o.genesis ?? null,
       scriptPublicKey: o.to, itemMetadata: null, n,
+      itemGenesis: o.kind === "item" ? (o.genesis ?? "h") : null,
     })),
   };
 }
