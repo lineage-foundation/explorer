@@ -105,6 +105,38 @@ two-way swaps (`/api/v1/swaps`, `/api/v1/swaps/{druid}`), supply and status. The
 OpenAPI 3.1 document is at `/api/v1/openapi.json`. Access is anonymous with a
 soft per-IP rate limit.
 
+## Deployment
+
+Merging to `main` deploys the explorer to Railway. The `Deploy` workflow
+(`.github/workflows/deploy.yml`) runs after `CI` succeeds for a push to `main`
+and:
+
+1. deploys the **indexer**, which applies the database migrations on start;
+2. deploys the **web app** once the indexer is up;
+3. smoke-tests the live site and fails the run if it does not answer.
+
+The order is deliberate: the web app reads the columns the newest migration
+adds, so it must not go out before the indexer has migrated.
+
+One-off setup:
+
+| What | Where | Value |
+| --- | --- | --- |
+| `RAILWAY_TOKEN` | repo or `production` environment **secret** | a Railway *project token* for the project and environment hosting the explorer |
+| `RAILWAY_INDEXER_SERVICE` | repo **variable** | name or id of the indexer service |
+| `RAILWAY_WEB_SERVICE` | repo **variable** | name or id of the web service |
+| `EXPLORER_URL` | repo **variable** (optional) | public URL to smoke-test; defaults to `https://explorer.lineage.to` |
+
+In Railway, each service must build its own Dockerfile from the repository
+root (`apps/indexer/Dockerfile`, `apps/web/Dockerfile`), and the indexer
+service should set its healthcheck path to `/health`: the indexer only starts
+answering after its migrations have run, so a healthy indexer means a migrated
+database. If either service is also connected to this repository in Railway
+with automatic deploys, turn that off so a merge is not deployed twice.
+
+To redeploy by hand, run the `Deploy` workflow from the Actions tab and
+optionally give it a branch, tag or commit.
+
 ## Scripts
 
 | Script | Purpose |
