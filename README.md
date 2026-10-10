@@ -98,9 +98,11 @@ is present on the network.
 
 ## Public API
 
-A read-only REST API is served under `/api/v1`. Interactive docs (Scalar) are
-at `/api/v1/docs` and the OpenAPI 3.1 document at `/api/v1/openapi.json`.
-Access is anonymous with a soft per-IP rate limit.
+A read-only REST API is served under `/api/v1`: blocks, transactions,
+addresses, items, two-way swaps (`/api/v1/swaps`, `/api/v1/swaps/{druid}`),
+supply and status. The API reference is the web app's `/docs` page, and the
+OpenAPI 3.1 document is at `/api/v1/openapi.json`. Access is anonymous with a
+soft per-IP rate limit.
 
 ## Scripts
 

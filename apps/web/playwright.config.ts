@@ -4,6 +4,7 @@ const DB = process.env.DATABASE_URL ?? "postgres://explorer:explorer@127.0.0.1:5
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   timeout: 30000,
   webServer: {
     // next start does NOT work with output: "standalone"; next dev serves

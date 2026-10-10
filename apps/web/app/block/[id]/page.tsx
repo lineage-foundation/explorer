@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getBlockByHashOrNumber, getBlockTransactionsForBlock, getBlockCoinbaseInfo, getMaxBlockNum } from "@explorer/db";
+import {
+  getBlockByHashOrNumber, getBlockTransactionsForBlock, getBlockCoinbaseInfo, getMaxBlockNum, getSwapsByDruids,
+} from "@explorer/db";
 import {
   Card, Table, THead, TBody, TR, TH, TD, Mono, Pill, CopyButton, EmptyState,
 } from "@explorer/ui";
@@ -9,6 +11,7 @@ import { getDb } from "../../../lib/db.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import { JsonBlock } from "../../components/JsonBlock.js";
 import { decodeUnicorn } from "../../../lib/detail.js";
+import { groupBySwap, summarise, swapHref } from "../../../lib/swap.js";
 import {
   absoluteTime, relativeTime, truncateHash, txTypeLabel, formatLngx, confirmations,
 } from "../../../lib/format.js";
@@ -39,6 +42,9 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
     getMaxBlockNum(db),
   ]);
   const txs = txsRes.transactions;
+  // A two-way swap's halves read as one row.
+  const rows = groupBySwap(txs);
+  const swaps = await getSwapsByDruids(db, rows.flatMap((r) => (r.kind === "swap" ? [r.druid] : [])));
   const unicorn = decodeUnicorn(block.seed);
 
   return (
@@ -113,10 +119,25 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
             <Table>
               <THead><TR><TH>Transaction</TH><TH>Type</TH></TR></THead>
               <TBody>
-                {txs.map((t) => {
+                {rows.map((r) => {
+                  if (r.kind === "swap") {
+                    const swap = swaps.get(r.druid)?.swap;
+                    return (
+                      <TR key={`swap:${r.druid}`}>
+                        <TD>
+                          <Link href={swapHref(r.druid)} className="text-link hover:text-link-hover">
+                            <Mono>{truncateHash(r.druid, 10, 4)}</Mono>
+                          </Link>
+                          {swap && <Mono className="ml-3 text-xs text-text-muted">{summarise(swap)}</Mono>}
+                        </TD>
+                        <TD><Pill tone="swap">swap</Pill></TD>
+                      </TR>
+                    );
+                  }
+                  const t = r.row;
                   const label = txTypeLabel(t.txType, t.coinbase);
                   return (
-                    <TR key={t.hash}>
+                    <TR key={`tx:${t.hash}`}>
                       <TD>
                         <Link href={`/transaction/${t.hash}`} className="text-link hover:text-link-hover">
                           <Mono>{truncateHash(t.hash)}</Mono>

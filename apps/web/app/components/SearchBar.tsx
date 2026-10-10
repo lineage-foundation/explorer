@@ -7,6 +7,7 @@ import type { Suggestion } from "../../lib/resolve-search.js";
 function glyph(kind: Suggestion["kind"]): string {
   if (kind === "block") return "▣";
   if (kind === "tx") return "↔";
+  if (kind === "swap") return "⇄";
   return "◈";
 }
 

@@ -17,6 +17,15 @@ describe("classify", () => {
     const h = "a".repeat(64);
     expect(classify(h)).toEqual({ kind: "address", href: `/address/${h}` });
   });
+  it("routes a canonical DRUID to its swap", () => {
+    const d = "DRUID0x277251e1651aa2861727323acf69a358";
+    expect(classify(d)).toEqual({ kind: "swap", href: `/swap/${d}` });
+    expect(classify(`  ${d}  `)).toEqual({ kind: "swap", href: `/swap/${d}` });
+  });
+  it("does not treat a malformed DRUID as a swap", () => {
+    expect(classify("DRUID0x123").kind).toBe("unknown");
+    expect(classify("DRUID0x" + "z".repeat(32)).kind).toBe("unknown");
+  });
   it("returns unknown for junk", () => {
     expect(classify("???")).toEqual({ kind: "unknown", href: null });
   });

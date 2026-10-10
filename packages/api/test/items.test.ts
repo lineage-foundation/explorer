@@ -41,7 +41,8 @@ describe("items route", () => {
     expect(item.spent).toBe(false);
     // >2^53 amount round-trips exactly as a string, with a formatted companion
     expect(item.amount).toBe("123456789012345678");
-    expect(typeof item.amountLngx).toBe("string");
+    // An item quantity is not a token amount, so it has no LNGX rendering.
+    expect(item.amountLngx).toBeNull();
     expect(body.pagination).toMatchObject({ total: 1, hasMore: false });
   });
 

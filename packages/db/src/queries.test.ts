@@ -33,11 +33,13 @@ beforeAll(async () => {
   await db().insert(transaction).values([
     { hash: "tx_1", blockHash: "b_hash_1", version: 1, coinbase: false },
     { hash: "tx_cb", blockHash: "b_hash_2", version: 1, coinbase: true },
-    { hash: "tx_2", blockHash: "b_hash_2", version: 1, coinbase: false },
+    { hash: "tx_2", blockHash: "b_hash_2", version: 1, coinbase: false, druid: "DRUID0xq" },
   ]);
   await db().insert(txOut).values([
     { txId: 1, txHash: "tx_1", valueType: "token", amount: "500", locktime: "0", scriptPublicKey: "addr_1", n: 0 },
     { txId: 2, txHash: "tx_cb", valueType: "token", amount: "1000", locktime: "0", scriptPublicKey: "miner", n: 0 },
+    // An item output spent by tx_2, so an input can resolve to an item.
+    { txId: 1, txHash: "tx_1", valueType: "item", amount: "1", locktime: "0", genesisHash: "gen_x", scriptPublicKey: "addr_1", n: 1 },
   ]);
   await db().insert(txIn).values([
     { txId: 1, txHash: "tx_1", scriptSignature: {} },
@@ -45,11 +47,16 @@ beforeAll(async () => {
       txId: 3, txHash: "tx_2", scriptSignature: {},
       previousOutTxHash: "tx_1", previousOutTxN: 0,
     },
+    { txId: 3, txHash: "tx_2", scriptSignature: {}, previousOutTxHash: "tx_1", previousOutTxN: 1 },
   ]);
   await db().insert(txInExpanded).values([
     {
       txId: 3, txHash: "tx_2", scriptSignature: {},
       previousOutTxHash: "tx_1", previousOutTxN: 0, outScriptPublicKey: "addr_1",
+    },
+    {
+      txId: 3, txHash: "tx_2", scriptSignature: {},
+      previousOutTxHash: "tx_1", previousOutTxN: 1, outScriptPublicKey: "addr_1",
     },
   ]);
   await db().insert(circulatingSupply).values([{ id: 1, circulatingSupply: "12345" }]);
@@ -58,6 +65,21 @@ beforeAll(async () => {
 afterAll(async () => { await handle.close(); });
 
 describe("read queries", () => {
+  it("exposes the druid and each input's asset kind on a transaction", async () => {
+    const tx = await getTransactionByHash(db(), "tx_2");
+    expect(tx?.druid).toBe("DRUID0xq");
+    expect(tx?.ins.map((i) => [i.valueType, i.genesisHash])).toEqual(
+      expect.arrayContaining([["token", null], ["item", "gen_x"]]),
+    );
+    expect((await getTransactionByHash(db(), "tx_1"))?.druid).toBeNull();
+  });
+
+  it("exposes the druid on a block's transactions", async () => {
+    const res = await getBlockTransactions(db(), "b_hash_2");
+    expect(res?.transactions.find((t) => t.hash === "tx_2")?.druid).toBe("DRUID0xq");
+    expect(res?.transactions.find((t) => t.hash === "tx_cb")?.druid).toBeNull();
+  });
+
   it("lists blocks newest-first with pagination", async () => {
     const res = await getBlocks(db(), { limit: 10, offset: 0, order: "desc" });
     expect(res.blocks[0]?.num).toBe(2);
@@ -158,11 +180,11 @@ describe("read queries", () => {
 
   it("resolves a spend transaction's input address and amount via tx_in_expanded", async () => {
     const tx = await getTransactionByHash(db(), "tx_2");
-    expect(tx?.ins).toHaveLength(1);
-    expect(tx?.ins[0]?.fromAddress).toBe("addr_1");
-    expect(tx?.ins[0]?.amount).toBe("500");
-    expect(tx?.ins[0]?.previousOutTxHash).toBe("tx_1");
-    expect(tx?.ins[0]?.previousOutTxN).toBe(0);
+    expect(tx?.ins).toHaveLength(2);
+    const spend = tx?.ins.find((i) => i.previousOutTxN === 0);
+    expect(spend?.fromAddress).toBe("addr_1");
+    expect(spend?.amount).toBe("500");
+    expect(spend?.previousOutTxHash).toBe("tx_1");
   });
 
   it("leaves fromAddress and amount null for an unresolved input", async () => {

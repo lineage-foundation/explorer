@@ -1,7 +1,6 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import type { Database } from "@explorer/db";
 import { searchItems } from "@explorer/db";
-import { formatLngxPlain } from "@explorer/config";
 import { ItemQuery, ItemOutputSchema, listSchema } from "../schemas.js";
 import { CACHE } from "../helpers.js";
 import { ProblemError } from "../problem.js";
@@ -31,7 +30,7 @@ export function registerItems(app: OpenAPIHono, db: Database): void {
           metadata: i.metadata,
           address: i.address,
           amount: i.amount,
-          amountLngx: i.amount !== null ? formatLngxPlain(i.amount) : null,
+          amountLngx: null,
           spent: i.spent,
           txHash: i.txHash,
           n: i.n,

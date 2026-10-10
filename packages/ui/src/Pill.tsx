@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn.js";
 
-type Tone = "token" | "item" | "coinbase" | "neutral";
+type Tone = "token" | "item" | "coinbase" | "swap" | "neutral";
 const TONES: Record<Tone, string> = {
   token: "border-accent/40 bg-accent/10 text-accent",
   item: "border-warning/40 bg-warning/10 text-warning",
   coinbase: "border-link/40 bg-link/10 text-link",
+  swap: "border-text/30 bg-text/5 text-text",
   neutral: "border-border text-text-muted",
 };
 

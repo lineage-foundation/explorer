@@ -16,6 +16,7 @@ describe("getOpenApiDocument", () => {
       "/api/v1/transactions", "/api/v1/transactions/{hash}",
       "/api/v1/addresses/{address}", "/api/v1/addresses/{address}/transactions",
       "/api/v1/items", "/api/v1/supply", "/api/v1/status",
+      "/api/v1/swaps", "/api/v1/swaps/{druid}",
     ]) {
       expect(Object.keys(doc.paths)).toContain(path);
     }
@@ -27,5 +28,7 @@ describe("getOpenApiDocument", () => {
     // Response schemas are registered as reusable components (resolved by $ref).
     expect(doc.components?.schemas).toBeTruthy();
     expect(Object.keys(doc.components?.schemas ?? {}).length).toBeGreaterThan(5);
+    expect(doc.paths["/api/v1/swaps"]?.get?.tags).toEqual(["Swaps"]);
+    expect(Object.keys(doc.components?.schemas ?? {})).toEqual(expect.arrayContaining(["Swap", "SwapList"]));
   });
 });

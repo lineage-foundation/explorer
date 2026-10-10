@@ -42,12 +42,16 @@ export const transaction = pgTable(
     updatedAt: timestamp("updatedAt", { withTimezone: false }).defaultNow().notNull(),
     fees: jsonb("fees"),
     druidInfo: jsonb("druidInfo"),
+    // The DRUID shared by the halves of a two-way swap, lifted out of druidInfo
+    // so a swap's transactions can be found and grouped by an indexed column.
+    druid: varchar("druid"),
     coinbase: boolean("coinbase").default(false).notNull(),
   },
   (t) => ({
     hashUnique: uniqueIndex("UK_transaction_hash").on(t.hash),
     // Supports LIKE 'prefix%' search on transaction hashes under a non-C collation.
     hashPrefix: index("IX_transaction_hash_prefix").on(t.hash.op("varchar_pattern_ops")),
+    druidIdx: index("IX_transaction_druid").on(t.druid),
     blockFk: foreignKey({
       columns: [t.blockHash],
       foreignColumns: [block.hash],

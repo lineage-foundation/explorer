@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { BlockListItem, TxListItem } from "@explorer/db";
+import type { ActivityItem, BlockListItem } from "@explorer/db";
 import { StatRow } from "./StatRow.js";
 import { BlockTable } from "./BlockTable.js";
 import { TxTable } from "./TxTable.js";
 
 interface Snapshot {
   blocks: BlockListItem[];
-  txs: TxListItem[];
+  txs: ActivityItem[];
   blocksCount: number;
   txCount: number;
   circulatingSupply: string;
@@ -36,7 +36,7 @@ export function LatestFeed({ initial }: { initial: Snapshot }) {
           setSnap({
             ...data,
             blocks: reviveDates<BlockListItem>(data.blocks as never),
-            txs: reviveDates<TxListItem>(data.txs as never),
+            txs: reviveDates<ActivityItem>(data.txs as never),
           });
         }
       } catch {

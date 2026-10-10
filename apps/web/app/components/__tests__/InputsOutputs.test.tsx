@@ -1,11 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import type { TxDetail } from "@explorer/db";
 import type { ReactNode } from "react";
 
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));
 
-import { sumAmounts } from "../InputsOutputs.js";
+import { InputsOutputs, sumAmounts } from "../InputsOutputs.js";
+import { SwapBanner } from "../SwapBanner.js";
 
 const raw = (lngx: bigint) => (lngx * 72072000n).toString();
 
@@ -19,5 +22,84 @@ describe("sumAmounts", () => {
   it("keeps precision for a sum beyond 2^53", () => {
     const big = raw(1_250_000_000n); // 1.25B LNGX, ~9e16 raw units (> 2^53)
     expect(sumAmounts([big, big])).toBe("2,500,000,000");
+  });
+});
+
+function detail(
+  ins: { from: string; amount: string; kind?: "token" | "item"; genesis?: string }[],
+  outs: { to: string; amount: string; kind?: "token" | "item"; genesis?: string }[],
+): TxDetail {
+  return {
+    blockHash: "b", hash: "h", version: 2, timestamp: null, coinbase: false, fees: null, druidInfo: null, druid: null,
+    ins: ins.map((i, n) => ({
+      scriptSignature: {}, previousOutTxHash: "prev", previousOutTxN: n, fromAddress: i.from, amount: i.amount,
+      valueType: i.kind ?? "token", genesisHash: i.genesis ?? null,
+    })),
+    outs: outs.map((o, n) => ({
+      valueType: o.kind ?? "token", amount: o.amount, locktime: "0", genesisHash: o.genesis ?? null,
+      scriptPublicKey: o.to, itemMetadata: null, n,
+    })),
+  };
+}
+
+describe("InputsOutputs", () => {
+  it("shows an item input as an item, never as LNGX", () => {
+    const { container } = render(
+      <InputsOutputs
+        coinbase={false}
+        tx={detail(
+          [{ from: "addrA", amount: "1", kind: "item", genesis: "gen1" }],
+          [{ to: "addrB", amount: "1", kind: "item", genesis: "gen1" }],
+        )}
+      />,
+    );
+    expect(container.textContent).not.toMatch(/0\.0+1 LNGX/);
+    expect(container.textContent).toContain("0 LNGX in");
+    expect(container.textContent).toContain("0 LNGX out");
+    expect(container.textContent).toContain("· 1 item");
+    expect(screen.getAllByText("× 1")).toHaveLength(2);
+    const genesisLinks = screen.getAllByRole("link").filter((a) => a.getAttribute("href") === "/transaction/gen1");
+    expect(genesisLinks).toHaveLength(2);
+  });
+
+  it("pluralises the item count from the outputs", () => {
+    const { container } = render(
+      <InputsOutputs
+        coinbase={false}
+        tx={detail(
+          [{ from: "addrA", amount: "3", kind: "item", genesis: "gen1" }],
+          [{ to: "addrB", amount: "2", kind: "item", genesis: "gen1" }, { to: "addrA", amount: "1", kind: "item", genesis: "gen1" }],
+        )}
+      />,
+    );
+    expect(container.textContent).toContain("· 3 items");
+  });
+
+  it("leaves a token-only transaction unchanged", () => {
+    const { container } = render(
+      <InputsOutputs
+        coinbase={false}
+        tx={detail([{ from: "addrA", amount: raw(5n) }], [{ to: "addrB", amount: raw(2n) }, { to: "addrA", amount: raw(3n) }])}
+      />,
+    );
+    expect(container.textContent).toContain("5 LNGX in");
+    expect(container.textContent).toContain("5 LNGX out");
+    expect(container.textContent).not.toContain("item");
+    expect(container.textContent).toContain("· change");
+  });
+});
+
+describe("SwapBanner", () => {
+  it("links to the swap and to each counterpart half", () => {
+    render(<SwapBanner druid="odd druid/1" counterparts={["hB", "hC"]} />);
+    expect(screen.getByText("Half of a two-way swap")).toBeInTheDocument();
+    expect(screen.getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
+      "/swap/odd%20druid%2F1", "/transaction/hB", "/transaction/hC",
+    ]);
+  });
+
+  it("says so when no counterpart is indexed", () => {
+    render(<SwapBanner druid="DRUID0xs1" counterparts={[]} />);
+    expect(screen.getByText("none indexed")).toBeInTheDocument();
   });
 });

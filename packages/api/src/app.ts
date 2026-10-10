@@ -8,6 +8,7 @@ import { registerTransactions } from "./routes/transactions.js";
 import { registerAddresses } from "./routes/addresses.js";
 import { registerItems } from "./routes/items.js";
 import { registerMeta } from "./routes/meta.js";
+import { registerSwaps } from "./routes/swaps.js";
 
 export interface ApiDeps {
   db: Database;
@@ -43,6 +44,7 @@ export function createApiApp({ db, rateLimit: rl }: ApiDeps): OpenAPIHono {
   registerTransactions(app, db);
   registerAddresses(app, db);
   registerItems(app, db);
+  registerSwaps(app, db);
   registerMeta(app, db);
 
   return app;

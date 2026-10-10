@@ -16,6 +16,23 @@ beforeEach(async () => {
 });
 
 describe("processBlock", () => {
+  it("stores the druid of a two-way half and null for an ordinary transaction", async () => {
+    const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["d1", "p1"] });
+    const half = {
+      ...buildTokenTx([{ address: "A", amount: 5 }]),
+      druid_info: { druid: "DRUID0xaa", participants: 2, expectations: [], genesis_hash: null },
+    };
+    await processBlock(db(), {
+      blockHash: "H0", block, skip: new Set(),
+      transactions: [
+        { hash: "d1", tx: half, coinbase: false },
+        { hash: "p1", tx: buildTokenTx([{ address: "A", amount: 1 }]), coinbase: false },
+      ],
+    });
+    const rows = await db().select({ hash: schema.transaction.hash, druid: schema.transaction.druid }).from(schema.transaction);
+    expect(Object.fromEntries(rows.map((r) => [r.hash, r.druid]))).toEqual({ d1: "DRUID0xaa", p1: null });
+  });
+
   it("writes token output, item output, coinbase, and a same-block spend", async () => {
     // block 0: coinbase mints 100 to A; t1 sends token 40 to A and an item to A
     const block = buildBlock({ num: 0, hash: "H0", previousHash: "", miningTxHash: "cb0", txHashes: ["t1", "t2"] });

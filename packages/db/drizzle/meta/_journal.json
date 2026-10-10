@@ -43,6 +43,13 @@
       "when": 1788602998274,
       "tag": "0005_puzzling_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791611669895,
+      "tag": "0006_acoustic_warpath",
+      "breakpoints": true
     }
   ]
 }
