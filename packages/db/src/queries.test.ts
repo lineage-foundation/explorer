@@ -370,7 +370,7 @@ describe("read queries", () => {
       ["im1", "im2", "im3", "im4", "im5", "spend1"].map((hash) => ({ hash, blockHash: "ib", version: 1, coinbase: false })),
     );
     const item = (txHash: string, genesisHash: string, itemMetadata: string, address: string) => ({
-      txId: 0, txHash, valueType: "item", amount: "1", locktime: "0", genesisHash,
+      txId: 0, txHash, valueType: "item", amount: "1", locktime: "0", genesisHash, itemGenesis: genesisHash,
       scriptPublicKey: address, itemMetadata, n: 0,
     });
     await db().insert(txOut).values([

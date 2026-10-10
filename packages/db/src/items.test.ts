@@ -4,6 +4,7 @@ import {
   block, transaction, txIn, txOut, txInExpanded, coinsHistory, circulatingSupply,
 } from "./schema.js";
 import { getItem, getItems, getItemHolders, getItemTransfers, getAddressItems } from "./items.js";
+import { searchItems } from "./queries.js";
 
 const URL = process.env.TEST_DATABASE_URL ?? "postgres://explorer:explorer@localhost:5432/explorer_test";
 let handle: { db: Database; close: () => Promise<void> };
@@ -190,5 +191,45 @@ describe("getAddressItems", () => {
     expect(page.items.map((i) => i.genesisHash)).toEqual(["it_c"]);
     expect(page.pagination).toMatchObject({ total: 2, hasMore: false });
     expect((await getAddressItems(db(), "P", {})).pagination.total).toBe(0);
+  });
+});
+
+describe("searchItems", () => {
+  const ref = (i: { txHash: string; n: number }) => `${i.txHash}:${i.n}`;
+
+  it("finds every output of an item by its genesis hash, including the creation output", async () => {
+    const res = await searchItems(db(), { genesis: "it_a" });
+    expect(res.items.map(ref).sort()).toEqual(["it_a:0", "xf_1:0", "xf_1:1", "xf_2:0", "xf_2:1"]);
+    expect(res.items.every((i) => i.genesisHash === "it_a")).toBe(true);
+    expect(res.pagination.total).toBe(5);
+  });
+
+  it("finds a never-transferred item by its genesis hash", async () => {
+    const res = await searchItems(db(), { genesis: "it_b" });
+    expect(res.items.map((i) => [i.txHash, i.genesisHash, i.spent])).toEqual([["it_b", "it_b", false]]);
+  });
+
+  it("carries the item's metadata on transfer outputs", async () => {
+    const res = await searchItems(db(), { genesis: "it_a" });
+    expect(res.items.every((i) => i.metadata === ALPHA_META)).toBe(true);
+  });
+
+  it("matches metadata against the item, so it finds the current holders", async () => {
+    const held = await searchItems(db(), { q: "alpha", spent: false });
+    expect(held.items.map((i) => [i.address, i.amount]).sort()).toEqual([["A", "1"], ["B", "1"], ["B", "1"]]);
+    const gone = await searchItems(db(), { q: "alpha", spent: true });
+    expect(gone.items.map(ref).sort()).toEqual(["it_a:0", "xf_1:0"]);
+    expect((await searchItems(db(), { q: "alpha" })).pagination.total).toBe(5);
+  });
+
+  it("treats LIKE metacharacters literally", async () => {
+    expect((await searchItems(db(), { q: "50%_off" })).pagination.total).toBe(5);
+    expect((await searchItems(db(), { q: "5%f" })).items).toHaveLength(0);
+  });
+
+  it("keeps a transfer whose create transaction is not indexed, without metadata", async () => {
+    expect((await searchItems(db(), { genesis: "missing_create" })).items).toEqual([
+      expect.objectContaining({ txHash: "orphan_xf", genesisHash: "missing_create", metadata: null, spent: false }),
+    ]);
   });
 });

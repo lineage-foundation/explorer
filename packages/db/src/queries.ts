@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, like, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lte, sql } from "drizzle-orm";
 import BigNumber from "bignumber.js";
 import type { Database } from "./client.js";
 import {
@@ -539,34 +539,60 @@ export interface ItemOutput {
 
 /**
  * Search item outputs (tx_out rows with valueType 'item') by a case-insensitive
- * metadata substring and/or an exact genesis hash (item class). `spent` reports
- * whether the output has since been spent (false ⇒ a current holder). Ordered
- * newest-first with a unique tiebreaker for stable pagination. Amounts stay
- * strings. `q` is escaped for LIKE metacharacters.
+ * metadata substring and/or an item's genesis hash, optionally only spent or
+ * only unspent ones (`spent: false` ⇒ current holders). Ordered newest-first
+ * with a unique tiebreaker for stable pagination. Amounts stay strings. `q` is
+ * escaped for LIKE metacharacters.
+ *
+ * On chain only the creation output carries metadata and it has no genesis hash
+ * of its own, so both are resolved per item here: `genesisHash` is the item's
+ * genesis for every row (tx_out.itemGenesis), and `metadata` is the output's own
+ * metadata or, failing that, the item's (from its creation output). `q` matches
+ * either, so a search finds an item's current holder and not only its creator.
  */
 export async function searchItems(
   db: Database,
-  opts: { q?: string; genesis?: string; limit?: number; offset?: number },
+  opts: { q?: string; genesis?: string; spent?: boolean; limit?: number; offset?: number },
 ): Promise<{ items: ItemOutput[]; pagination: Pagination }> {
   const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
   const offset = Math.max(opts.offset ?? 0, 0);
 
+  const spent = sql<boolean>`exists (
+    select 1 from ${txIn} ti
+    where ti."previousOutTxHash" = ${txOut.txHash} and ti."previousOutTxN" = ${txOut.n}
+  )`;
+  // The item's metadata: the first creation output of its create transaction.
+  const itemMeta = sql<string | null>`(
+    select c."itemMetadata" from "tx_out" c
+    where c."txHash" = ${txOut.itemGenesis} and c."valueType" = 'item' and c."genesisHash" is null
+    order by c.n limit 1
+  )`;
+
   const filters = [eq(txOut.valueType, "item")];
-  if (opts.genesis) filters.push(eq(txOut.genesisHash, opts.genesis));
-  if (opts.q) filters.push(ilike(txOut.itemMetadata, `%${escapeLike(opts.q)}%`));
+  if (opts.genesis) filters.push(eq(txOut.itemGenesis, opts.genesis));
+  if (opts.q) {
+    const pattern = `%${escapeLike(opts.q)}%`;
+    // Both arms can use the trigram index on itemMetadata.
+    filters.push(sql`(
+      ${txOut.itemMetadata} ilike ${pattern}
+      or ${txOut.itemGenesis} in (
+        select c."txHash" from "tx_out" c
+        where c."valueType" = 'item' and c."genesisHash" is null and c."itemMetadata" ilike ${pattern}
+      )
+    )`);
+  }
+  if (opts.spent !== undefined) filters.push(opts.spent ? spent : sql`not ${spent}`);
   const where = and(...filters);
 
   const [totalRow] = await db.select({ value: count() }).from(txOut).where(where);
   const total = totalRow?.value ?? 0;
   if (total === 0) return { items: [], pagination: { total: 0, limit, offset, hasMore: false } };
 
-  const spent = sql<boolean>`exists (
-    select 1 from ${txIn} ti
-    where ti."previousOutTxHash" = ${txOut.txHash} and ti."previousOutTxN" = ${txOut.n}
-  )`;
   const rows = await db
     .select({
-      genesisHash: txOut.genesisHash, metadata: txOut.itemMetadata, address: txOut.scriptPublicKey,
+      genesisHash: sql<string | null>`coalesce(${txOut.itemGenesis}, ${txOut.genesisHash})`,
+      metadata: sql<string | null>`coalesce(${txOut.itemMetadata}, ${itemMeta})`,
+      address: txOut.scriptPublicKey,
       amount: txOut.amount, txHash: txOut.txHash, n: txOut.n,
       blockNum: block.num, blockHash: block.hash, timestamp: block.timestamp, spent,
     })
