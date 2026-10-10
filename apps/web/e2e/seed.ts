@@ -30,7 +30,7 @@ export async function seed(): Promise<void> {
       // n:1 item output on t0; inserted last to keep the pre-existing txOut serial ids
       // (and coinsHistory.outIds below, which reference them) unchanged.
       {
-        txId: 2, txHash: "t0", valueType: "item", amount: null, locktime: "0", genesisHash: "gen1", itemMetadata: "meta1", scriptPublicKey: "addrA", n: 1,
+        txId: 2, txHash: "t0", valueType: "item", amount: null, locktime: "0", genesisHash: "gen1", itemGenesis: "gen1", itemMetadata: "meta1", scriptPublicKey: "addrA", n: 1,
       },
     ]);
     await db.insert(schema.txIn).values([
@@ -53,9 +53,12 @@ export const SWAP_DRUID = `DRUID0x${"ab".repeat(16)}`;
 // needs URL-encoding in every position a path segment can go wrong.
 export const ODD_DRUID = "odd druid/1 50%";
 
+// The item traded in the swap below: the hash of its create transaction.
+export const ITEM_GENESIS = "gen2";
+
 // A two-way swap in block 1 between two addresses of its own (addrC, addrD), so
 // the balances and counts the other specs assert are untouched:
-//   f1 funds addrC with 10 LNGX and addrD with one gen2 item;
+//   gen2 creates one item (with metadata) to addrD; f1 funds addrC with 10 LNGX;
 //   sA — addrD gives the item to addrC, expecting 4 LNGX;
 //   sB — addrC pays addrD 4 LNGX (6 LNGX change), expecting the item.
 async function seedSwap(db: Database): Promise<void> {
@@ -63,17 +66,20 @@ async function seedSwap(db: Database): Promise<void> {
   const item = { amount: "1", genesis_hash: "gen2", metadata: null };
   const txs = [
     {
+      // The create transaction: its item output has no genesis hash of its own.
+      hash: ITEM_GENESIS, druidInfo: null,
+      ins: [] as { prev: string; n: number; from: string }[],
+      outs: [{ to: "addrD", valueType: "item", amount: "1", genesisHash: null, meta: '{"title":"Seed Relic","medium":"digital"}' }],
+    },
+    {
       hash: "f1", druidInfo: null,
       ins: [] as { prev: string; n: number; from: string }[],
-      outs: [
-        { to: "addrC", valueType: "token", amount: R(10), genesisHash: null },
-        { to: "addrD", valueType: "item", amount: "1", genesisHash: "gen2" },
-      ],
+      outs: [{ to: "addrC", valueType: "token", amount: R(10), genesisHash: null }],
     },
     {
       hash: "sA",
       druidInfo: { druid: SWAP_DRUID, participants: 2, genesis_hash: null, expectations: [{ from: "ins-hash", to: "addrD", asset: { Token: R(4) } }] },
-      ins: [{ prev: "f1", n: 1, from: "addrD" }],
+      ins: [{ prev: ITEM_GENESIS, n: 0, from: "addrD" }],
       outs: [{ to: "addrC", valueType: "item", amount: "1", genesisHash: "gen2" }],
     },
     {
@@ -119,6 +125,8 @@ async function seedSwap(db: Database): Promise<void> {
       const [out] = await db.insert(schema.txOut).values({
         txId, txHash: t.hash, valueType: o.valueType, amount: o.amount, locktime: "0",
         genesisHash: o.genesisHash, scriptPublicKey: o.to, n,
+        itemGenesis: o.valueType === "item" ? (o.genesisHash ?? t.hash) : null,
+        itemMetadata: (o as { meta?: string }).meta ?? null,
       }).returning({ id: schema.txOut.id });
       outIds.set(`${t.hash}:${n}`, out!.id);
     }
