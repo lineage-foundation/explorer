@@ -1,9 +1,11 @@
 import type { Database } from "@explorer/db";
-import { getBlockHashByNum, searchByPrefix } from "@explorer/db";
+import { getBlockHashByNum, getSwapByDruid, searchByPrefix } from "@explorer/db";
 import { truncateHash } from "./format.js";
+import { DRUID_RE } from "./search.js";
+import { swapHref } from "./swap.js";
 
 export interface Suggestion {
-  kind: "block" | "tx" | "address";
+  kind: "block" | "tx" | "address" | "swap";
   label: string;
   sublabel?: string;
   href: string;
@@ -27,6 +29,15 @@ export async function resolveSearch(db: Database, query: string): Promise<Sugges
     const found = hash !== null;
     return [{
       kind: "block", label: `Block #${Number.parseInt(q, 10).toLocaleString()}`, href: `/block/${q}`, found,
+      ...(found ? {} : { sublabel: "not found" }),
+    }];
+  }
+
+  // A complete DRUID is an exact lookup of one swap.
+  if (DRUID_RE.test(q)) {
+    const found = (await getSwapByDruid(db, q)) !== null;
+    return [{
+      kind: "swap", label: `Swap ${truncateHash(q, 11, 4)}`, href: swapHref(q), found,
       ...(found ? {} : { sublabel: "not found" }),
     }];
   }

@@ -3,15 +3,32 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@explorer/db", () => ({
   getBlockHashByNum: vi.fn(),
   searchByPrefix: vi.fn(),
+  getSwapByDruid: vi.fn(),
 }));
 
-import { getBlockHashByNum, searchByPrefix } from "@explorer/db";
+import { getBlockHashByNum, searchByPrefix, getSwapByDruid } from "@explorer/db";
 import { resolveSearch } from "../resolve-search.js";
 
 const db = {} as never;
 beforeEach(() => vi.clearAllMocks());
 
 describe("resolveSearch", () => {
+  const DRUID = "DRUID0x277251e1651aa2861727323acf69a358";
+
+  it("resolves an exact DRUID to its swap without a prefix search", async () => {
+    vi.mocked(getSwapByDruid).mockResolvedValue({ swap: {}, halves: [] } as never);
+    const res = await resolveSearch(db, DRUID);
+    expect(res).toEqual([{ kind: "swap", label: "Swap DRUID0x2772…a358", href: `/swap/${DRUID}`, found: true }]);
+    expect(getSwapByDruid).toHaveBeenCalledWith(db, DRUID);
+    expect(searchByPrefix).not.toHaveBeenCalled();
+  });
+
+  it("marks an unknown DRUID as not found", async () => {
+    vi.mocked(getSwapByDruid).mockResolvedValue(null);
+    const [s] = await resolveSearch(db, DRUID);
+    expect(s).toMatchObject({ kind: "swap", found: false, sublabel: "not found" });
+  });
+
   it("resolves a numeric query to a block number", async () => {
     vi.mocked(getBlockHashByNum).mockResolvedValue("H5");
     const [s] = await resolveSearch(db, "5");
