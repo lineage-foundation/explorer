@@ -47,8 +47,8 @@ describe("legsForAddress", () => {
 
 describe("swapHref", () => {
   it("URL-encodes the druid", () => {
-    expect(swapHref("DRUID0xab")).toBe("/swap/DRUID0xab");
-    expect(swapHref("odd druid/1")).toBe("/swap/odd%20druid%2F1");
+    expect(swapHref("DRUID0xab")).toBe("/trade/DRUID0xab");
+    expect(swapHref("odd druid/1")).toBe("/trade/odd%20druid%2F1");
   });
 });
 

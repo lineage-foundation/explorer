@@ -111,9 +111,9 @@ describe("InputsOutputs item links", () => {
 describe("SwapBanner", () => {
   it("links to the swap and to each counterpart half", () => {
     render(<SwapBanner druid="odd druid/1" counterparts={["hB", "hC"]} />);
-    expect(screen.getByText("Half of a two-way swap")).toBeInTheDocument();
+    expect(screen.getByText("Half of a two-way trade")).toBeInTheDocument();
     expect(screen.getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
-      "/swap/odd%20druid%2F1", "/transaction/hB", "/transaction/hC",
+      "/trade/odd%20druid%2F1", "/transaction/hB", "/transaction/hC",
     ]);
   });
 

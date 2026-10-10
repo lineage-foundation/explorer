@@ -32,9 +32,9 @@ describe("TxTable", () => {
     const rows = screen.getAllByRole("row").slice(1); // drop the header row
     expect(rows).toHaveLength(2);
     const swapRow = within(rows[0]!);
-    expect(swapRow.getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual(["/swap/DRUID0xs1", "/block/2"]);
+    expect(swapRow.getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual(["/trade/DRUID0xs1", "/block/2"]);
     expect(swapRow.getByText("1 item ⇄ 1 LNGX")).toBeInTheDocument();
-    expect(swapRow.getByText("swap")).toBeInTheDocument();
+    expect(swapRow.getByText("trade")).toBeInTheDocument();
     const plainRow = within(rows[1]!);
     expect(plainRow.getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual(["/transaction/t1", "/block/1"]);
     expect(plainRow.getByText("token")).toBeInTheDocument();
@@ -42,7 +42,7 @@ describe("TxTable", () => {
 
   it("URL-encodes a non-canonical druid in the link", () => {
     render(<TxTable txs={[swap("odd druid/1", [tokenLeg])]} />);
-    expect(screen.getAllByRole("link")[0]?.getAttribute("href")).toBe("/swap/odd%20druid%2F1");
+    expect(screen.getAllByRole("link")[0]?.getAttribute("href")).toBe("/trade/odd%20druid%2F1");
   });
 
   it("renders a swap with no legs without throwing", () => {

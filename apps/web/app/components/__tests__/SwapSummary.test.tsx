@@ -46,6 +46,6 @@ describe("SwapSummary", () => {
 
   it("renders an empty state when there are no legs", () => {
     render(<SwapSummary swap={{ legs: [] }} />);
-    expect(screen.getByText("No legs could be derived for this swap.")).toBeInTheDocument();
+    expect(screen.getByText("No legs could be derived for this trade.")).toBeInTheDocument();
   });
 });

@@ -38,7 +38,7 @@ export async function resolveSearch(db: Database, query: string): Promise<Sugges
   if (DRUID_RE.test(q)) {
     const found = (await getSwapByDruid(db, q)) !== null;
     return [{
-      kind: "swap", label: `Swap ${truncateHash(q, 11, 4)}`, href: swapHref(q), found,
+      kind: "swap", label: `Trade ${truncateHash(q, 11, 4)}`, href: swapHref(q), found,
       ...(found ? {} : { sublabel: "not found" }),
     }];
   }

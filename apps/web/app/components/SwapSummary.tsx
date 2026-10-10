@@ -29,7 +29,7 @@ function Sender({ from }: { from: string[] | null }) {
 // Who gave what to whom, one row per leg.
 export function SwapSummary({ swap }: { swap: Pick<Swap, "legs"> }) {
   if (swap.legs.length === 0) {
-    return <div className="px-2 py-1.5 text-sm text-text-subtle">No legs could be derived for this swap.</div>;
+    return <div className="px-2 py-1.5 text-sm text-text-subtle">No legs could be derived for this trade.</div>;
   }
   return (
     <div className="rounded-md border border-border bg-surface p-2">

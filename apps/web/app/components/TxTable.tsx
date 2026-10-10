@@ -36,7 +36,7 @@ export function TxTable({ txs }: { txs: ActivityItem[] }) {
                   </Link>
                 </TD>
                 <TD className="truncate"><Mono>{summarise(t)}</Mono></TD>
-                <TD><Pill tone="swap">swap</Pill></TD>
+                <TD><Pill tone="swap">trade</Pill></TD>
                 <TD><span suppressHydrationWarning className="text-text-muted">{relativeTime(t.timestamp)}</span></TD>
               </TR>
             );

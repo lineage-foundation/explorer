@@ -19,8 +19,8 @@ describe("classify", () => {
   });
   it("routes a canonical DRUID to its swap", () => {
     const d = "DRUID0x277251e1651aa2861727323acf69a358";
-    expect(classify(d)).toEqual({ kind: "swap", href: `/swap/${d}` });
-    expect(classify(`  ${d}  `)).toEqual({ kind: "swap", href: `/swap/${d}` });
+    expect(classify(d)).toEqual({ kind: "swap", href: `/trade/${d}` });
+    expect(classify(`  ${d}  `)).toEqual({ kind: "swap", href: `/trade/${d}` });
   });
   it("does not treat a malformed DRUID as a swap", () => {
     expect(classify("DRUID0x123").kind).toBe("unknown");

@@ -41,7 +41,7 @@ describe("resolveSearch", () => {
   it("resolves an exact DRUID to its swap without a prefix search", async () => {
     vi.mocked(getSwapByDruid).mockResolvedValue({ swap: {}, halves: [] } as never);
     const res = await resolveSearch(db, DRUID);
-    expect(res).toEqual([{ kind: "swap", label: "Swap DRUID0x2772…a358", href: `/swap/${DRUID}`, found: true }]);
+    expect(res).toEqual([{ kind: "swap", label: "Trade DRUID0x2772…a358", href: `/trade/${DRUID}`, found: true }]);
     expect(getSwapByDruid).toHaveBeenCalledWith(db, DRUID);
     expect(searchByPrefix).not.toHaveBeenCalled();
   });

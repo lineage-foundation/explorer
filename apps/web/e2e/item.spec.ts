@@ -37,7 +37,7 @@ test("item page shows metadata, the current holder and the history", async ({ pa
   const history = page.locator("section", { has: page.getByRole("heading", { name: "History" }) });
   await expect(history.locator("tbody tr")).toHaveCount(2); // the swap transfer, then the creation
   await expect(history.locator("tbody tr").first().locator('a[href="/transaction/sA"]')).toBeVisible();
-  await expect(history.locator(`a[href="/swap/${SWAP_DRUID}"]`)).toBeVisible();
+  await expect(history.locator(`a[href="/trade/${SWAP_DRUID}"]`)).toBeVisible();
   await expect(history.locator("tbody tr").last().getByText("created")).toBeVisible();
 });
 
@@ -61,7 +61,7 @@ test("the create transaction, the transfer and the swap all link to the item", a
   await expect(page.locator(ITEM).first()).toBeVisible();
   await page.goto("/transaction/sA");
   await expect(page.locator(ITEM).first()).toBeVisible();
-  await page.goto(`/swap/${SWAP_DRUID}`);
+  await page.goto(`/trade/${SWAP_DRUID}`);
   await expect(page.locator(ITEM).first()).toBeVisible();
 });
 

@@ -44,7 +44,7 @@ describe("LatestFeed", () => {
       }],
     };
     render(<LatestFeed initial={withSwap} />);
-    expect(screen.getAllByRole("link").map((l) => l.getAttribute("href"))).toContain("/swap/DRUID0xs1");
+    expect(screen.getAllByRole("link").map((l) => l.getAttribute("href"))).toContain("/trade/DRUID0xs1");
   });
 
   it("renders the latest block and transaction rows as links", () => {

@@ -7,7 +7,7 @@ import { formatLngx } from "./format.js";
 
 /** Link to a swap's page. DRUIDs are client-chosen strings, so always encode. */
 export function swapHref(druid: string): string {
-  return `/swap/${encodeURIComponent(druid)}`;
+  return `/trade/${encodeURIComponent(druid)}`;
 }
 
 /** "1 item" / "3 items" for an item, "<amount> LNGX" for a token. */

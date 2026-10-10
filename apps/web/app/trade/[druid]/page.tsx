@@ -41,9 +41,9 @@ export default async function SwapPage({ params }: { params: Promise<{ druid: st
   return (
     <div className="space-y-6">
       <div>
-        <PageHeader eyebrow="Swap" title={truncateHash(druid, 12, 6)} />
+        <PageHeader eyebrow="Trade" title={truncateHash(druid, 12, 6)} />
         <div className="-mt-4 flex flex-wrap items-center gap-2 break-all font-mono text-sm text-text">
-          {druid} <CopyButton value={druid} /> <Pill tone="swap">swap</Pill>
+          {druid} <CopyButton value={druid} /> <Pill tone="swap">trade</Pill>
           {!swap.complete && <Pill tone="item">incomplete</Pill>}
         </div>
       </div>

@@ -87,7 +87,7 @@ export default async function AddressPage({
                             <Link href={swapHref(entry.swap.druid)} className="text-link hover:text-link-hover">
                               <Mono>{truncateHash(entry.swap.druid, 10, 4)}</Mono>
                             </Link>{" "}
-                            <Pill tone="swap">swap</Pill>
+                            <Pill tone="swap">trade</Pill>
                           </TD>
                           <TD>
                             <Link href={`/block/${t.blockHash}`} className="text-link hover:text-link-hover">
